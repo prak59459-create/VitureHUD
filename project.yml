@@ -1,0 +1,96 @@
+# XcodeGen 定義：GitHub Actions で正式アプリ（IPA）をビルドする。
+# ソースは HUDNavigator.swiftpm/ の中（Swift Playgrounds 版と共有）。
+# 生成される .xcodeproj はコミットしない（CI で毎回生成）。
+name: HUDNavigator
+options:
+  bundleIdPrefix: io.github.prak59459
+  deploymentTarget:
+    iOS: "18.0"
+  developmentLanguage: ja
+  createIntermediateGroups: true
+  generateEmptyDirectories: false
+
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    DEVELOPMENT_TEAM: ""
+    ENABLE_USER_SCRIPT_SANDBOXING: "YES"
+
+targets:
+  HUDNavigator:
+    type: application
+    platform: iOS
+    deploymentTarget: "18.0"
+    sources:
+      - path: HUDNavigator.swiftpm/Core
+      - path: HUDNavigator.swiftpm/App
+    info:
+      path: build/generated/Info.plist
+      properties:
+        CFBundleDisplayName: HUD Navigator
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        CFBundleDevelopmentRegion: ja
+        UILaunchScreen:
+          UIColorName: ""
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: true
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UIBackgroundModes:
+          - audio
+          - location
+        UIFileSharingEnabled: true
+        LSSupportsOpeningDocumentsInPlace: true
+        ITSAppUsesNonExemptEncryption: false
+        NSCameraUsageDescription: HUDの背景にカメラ映像を表示し、物体認識（実験機能）を行うために使います。映像は端末内でのみ処理し、保存・送信しません。
+        NSLocationWhenInUseUsageDescription: 現在地の表示、ナビゲーション、速度、天気の取得に使います。位置情報は端末内で処理します。
+        NSMicrophoneUsageDescription: 音声コマンド（AIアシスタント）で話しかけるために使います。
+        NSSpeechRecognitionUsageDescription: 話した言葉を文字にして、アプリの操作に変換するために使います。
+        NSMotionUsageDescription: 歩行・停止などの移動状態の推定と、センサー情報の表示に使います。
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.prak59459.hudnavigator
+        PRODUCT_NAME: HUDNavigator
+        PRODUCT_MODULE_NAME: HUDNavigator
+        TARGETED_DEVICE_FAMILY: "1,2"
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) FULL_BUILD"
+        ENABLE_PREVIEWS: "NO"
+        GENERATE_INFOPLIST_FILE: "NO"
+        ASSETCATALOG_COMPILER_GENERATE_ASSET_SYMBOLS: "NO"
+
+  HUDNavigatorTests:
+    type: bundle.unit-test
+    platform: iOS
+    deploymentTarget: "18.0"
+    sources:
+      - path: AppTests
+    dependencies:
+      - target: HUDNavigator
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: "YES"
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.prak59459.hudnavigator.tests
+
+schemes:
+  HUDNavigator:
+    build:
+      targets:
+        HUDNavigator: all
+        HUDNavigatorTests: [test]
+    test:
+      config: Debug
+      gatherCoverageData: false
+      targets:
+        - HUDNavigatorTests
+    archive:
+      config: Release

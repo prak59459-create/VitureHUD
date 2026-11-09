@@ -1,0 +1,236 @@
+import Foundation
+
+/// 音声認識したテキスト（日本語）をアプリの操作に変換する。端末内で動く・無料・オフライン。
+/// 当てはまらない文は `.ask` として AI アシスタントに渡す。
+public struct IntentParser: Sendable {
+    /// ユーザーが作ったプリセット名 → key（ユーザープリセットは id 文字列）
+    public var userPresetNames: [String: String]
+    public var userThemeNames: [String: String]
+
+    public init(userPresetNames: [String: String] = [:], userThemeNames: [String: String] = [:]) {
+        self.userPresetNames = userPresetNames
+        self.userThemeNames = userThemeNames
+    }
+
+    /// 表記ゆれを減らす（空白・句読点を除き、全角英数を半角に、英字を小文字に）。
+    public static func normalize(_ text: String) -> String {
+        var s = text
+        s = s.applyingFullWidthToHalfWidth()
+        s = s.lowercased()
+        // 長音「ー」は単語の一部なので残す。
+        let removed: Set<Character> = [" ", "\u{3000}", "。", "、", "！", "？", "!", "?", ".", ",", "「", "」", "・", "〜"]
+        return String(s.filter { !removed.contains($0) })
+    }
+
+    public func parse(_ rawText: String) -> AppCommand {
+        let text = Self.normalize(rawText)
+        guard !text.isEmpty else { return .cancel }
+        func has(_ words: String...) -> Bool { words.contains { text.contains($0) } }
+        func hasAny(_ words: [String]) -> Bool { words.contains { text.contains($0) } }
+
+        let negative = has("オフ", "おふ", "off", "止め", "とめ", "停止", "やめ", "消して", "けして", "無効", "切って", "きって", "非表示", "隠して", "かくして", "閉じ", "とじ", "終了", "しゅうりょう")
+        let positive = has("オン", "おん", "on", "開始", "かいし", "有効", "つけて", "付けて", "表示", "ひょうじ", "出して", "だして", "見せて", "スタート", "始め", "はじめ")
+
+        // キャンセル
+        if text == "キャンセル" || text == "やめて" || text == "なんでもない" || text == "取り消し" { return .cancel }
+
+        // もう一度
+        if has("もう一度", "もういちど", "繰り返して", "くりかえして", "なんて言った") { return .repeatGuidance }
+
+        // 背景
+        if has("背景", "はいけい", "バックグラウンド") || has("黒背景", "ブラック") {
+            if has("黒", "くろ", "ブラック", "black") { return .setBackground(.black) }
+            if has("カメラ", "かめら", "映像", "パススルー", "camera") { return .setBackground(.camera) }
+            if has("切り替え", "切替", "きりかえ", "変えて", "かえて") { return .toggleBackground }
+        }
+        if has("カメラモード", "カメラに切り替え", "カメラに変更", "カメラにして", "カメラ表示", "カメラ背景", "パススルー") { return .setBackground(.camera) }
+        if has("黒にして", "真っ黒", "まっくろ") { return .setBackground(.black) }
+
+        // HUD
+        if has("hud", "ハッド", "はっど", "ヘッドアップ") {
+            if has("編集", "へんしゅう") { return .open(.hudEditor) }
+            if has("整列", "せいれつ", "並べ", "ならべ") { return .autoArrange }
+            if negative { return .stopHUD }
+            if positive || has("起動", "きどう") { return .startHUD }
+        }
+        if has("自動整列", "整列して", "並べて", "ならべて") { return .autoArrange }
+
+        // プリセット・テーマ
+        if has("テーマ", "てーま") {
+            for (key, aliases) in BuiltInContent.themeAliases where hasAny(aliases.map { Self.normalize($0) }) {
+                return .applyTheme(key: key)
+            }
+            for (name, key) in userThemeNames where text.contains(Self.normalize(name)) {
+                return .applyTheme(key: key)
+            }
+        }
+        if has("モード", "もーど", "プリセット", "ぷりせっと", "にして", "に変更", "に切り替え") {
+            for (name, key) in userPresetNames where text.contains(Self.normalize(name)) {
+                return .applyPreset(key: key)
+            }
+            for (key, aliases) in BuiltInContent.presetAliases where hasAny(aliases.map { Self.normalize($0) }) {
+                // 「ナビを開始」などとの衝突を避けるため、徒歩は「モード/プリセット」が必要
+                return .applyPreset(key: key)
+            }
+        }
+
+        // 音声案内
+        if has("音声案内", "おんせいあんない", "読み上げ", "よみあげ", "音声ガイド", "ナビの音声", "ミュート", "みゅーと", "声") {
+            if has("ミュート", "みゅーと") { return .setVoiceGuidance(false) }
+            if negative { return .setVoiceGuidance(false) }
+            if positive { return .setVoiceGuidance(true) }
+        }
+
+        // 物体認識・危険検知
+        if has("危険検知", "きけんけんち", "危険警告", "衝突警告") {
+            return .setHazardAlerts(!negative)
+        }
+        if has("物体認識", "ぶったいにんしき", "物体検出", "物体検知", "認識", "検出") {
+            return .setDetection(!negative)
+        }
+
+        // 地図
+        if has("地図", "ちず", "マップ", "まっぷ", "map") {
+            if has("3d", "立体", "りったい", "スリーディー") { return .setMap3D(true) }
+            if has("2d", "平面", "へいめん", "ツーディー") { return .setMap3D(false) }
+            if has("大きく", "おおきく", "拡大", "かくだい", "ズームイン", "近く", "詳しく", "くわしく") { return .mapZoom(.zoomIn) }
+            if has("小さく", "ちいさく", "縮小", "しゅくしょう", "ズームアウト", "広く", "ひろく", "遠く") { return .mapZoom(.zoomOut) }
+            if negative { return .hideWidget(.miniMap) }
+            if positive { return .showWidget(.miniMap) }
+        }
+
+        // カメラ
+        if has("カメラ", "かめら") {
+            if has("明るく", "あかるく") { return .cameraExposure(.up) }
+            if has("暗く", "くらく") { return .cameraExposure(.down) }
+            if has("ズームイン", "拡大", "かくだい", "大きく", "おおきく") { return .cameraZoom(.zoomIn) }
+            if has("ズームアウト", "縮小", "しゅくしょう", "小さく", "ちいさく") { return .cameraZoom(.zoomOut) }
+        }
+
+        // ナビ
+        if has("ナビ", "なび", "案内", "あんない", "ルート", "るーと") {
+            if negative || has("やめ", "キャンセル") { return .stopNavigation }
+            if let dest = Self.extractDestination(text), !dest.isEmpty { return .navigate(to: dest) }
+            if positive || has("開始", "スタート") { return .startNavigation }
+        }
+        if let dest = Self.extractDestination(text), has("行きたい", "いきたい", "行って", "いって", "連れて", "つれて", "向かう", "むかう") {
+            return .navigate(to: dest)
+        }
+
+        // 周辺検索
+        if has("近く", "ちかく", "周辺", "しゅうへん", "最寄り", "もより", "付近", "この辺") || has("探して", "さがして", "どこ", "ある") {
+            for category in NearbyCategory.allCases where hasAny(category.aliases.map { Self.normalize($0) }) {
+                return .searchNearby(category)
+            }
+        }
+        if let query = Self.extractSearchQuery(text) {
+            // 「目的地を検索して」のように検索語が無い場合はナビ画面を開く
+            let generic = ["目的地", "行き先", "いきさき", "場所", "ばしょ", "住所", "じゅうしょ"]
+            return generic.contains(query) ? .open(.navigation) : .search(query)
+        }
+
+        // 状態の問い合わせ
+        if has("何時", "なんじ", "時刻", "じこく", "時間を教え") { return .status(.time) }
+        if has("何日", "なんにち", "日付", "ひづけ", "今日は何曜", "曜日") { return .status(.date) }
+        if has("バッテリー", "ばってりー", "電池", "でんち", "充電") { return .status(.battery) }
+        if has("速度", "そくど", "スピード", "速さ", "時速") && !has("表示") { return .status(.speed) }
+        if has("到着", "とうちゃく", "あと何分", "あとなんぷん", "いつ着", "何時に着") { return .status(.eta) }
+        if has("あと何キロ", "あと何メートル", "残り距離", "のこりきょり", "あとどのくらい", "あとどれくらい") { return .status(.remainingDistance) }
+        if has("天気", "てんき", "雨", "あめ", "気温", "きおん", "暑い", "寒い", "傘") && !positive { return .status(.weather) }
+        if has("ここはどこ", "現在地", "げんざいち", "今どこ", "いまどこ") { return .status(.location) }
+        if has("どっち", "方角", "ほうがく", "方位", "北はどっち") { return .status(.heading) }
+
+        // ウィジェットの表示・非表示（「〇〇を表示して」「〇〇を消して」）
+        for kind in WidgetKind.allCases {
+            let names = Self.widgetAliases(kind).map { Self.normalize($0) }
+            if hasAny(names) {
+                if negative { return .hideWidget(kind) }
+                if positive { return .showWidget(kind) }
+            }
+        }
+
+        // 画面
+        if has("開いて", "ひらいて", "を表示", "画面") {
+            if has("設定", "せってい") { return .open(.settings) }
+            if has("履歴", "りれき") { return .open(.history) }
+            if has("天気", "てんき") { return .open(.weather) }
+            if has("ホーム", "ほーむ") { return .open(.home) }
+        }
+
+        return .ask(rawText.trimmingCharacters(in: .whitespacesAndNewlines))
+    }
+
+    static func widgetAliases(_ kind: WidgetKind) -> [String] {
+        switch kind {
+        case .clock: return ["時計", "とけい"]
+        case .date: return ["日付", "ひづけ", "カレンダー"]
+        case .battery: return ["バッテリー", "電池"]
+        case .speed: return ["速度", "そくど", "スピード", "速度計"]
+        case .compass: return ["コンパス", "こんぱす", "方位"]
+        case .miniMap: return ["ミニマップ", "みにまっぷ"]
+        case .weather: return ["天気", "てんき"]
+        case .temperature: return ["気温", "きおん", "温度"]
+        case .precipitation: return ["降水", "こうすい", "雨の確率"]
+        case .airQuality: return ["空気質", "空気", "大気"]
+        case .tripDistance: return ["移動距離", "いどうきょり", "歩いた距離"]
+        case .eta: return ["到着予想", "到着予定", "eta"]
+        case .nextTurn: return ["次の曲がり角", "曲がり角", "ターン"]
+        case .notifications: return ["通知", "つうち"]
+        case .gpsStatus: return ["gps", "じーぴーえす"]
+        case .sensors: return ["センサー", "せんさー", "ジャイロ", "加速度"]
+        case .assistant: return ["アシスタント", "あしすたんと"]
+        case .detections: return ["検出結果", "検出表示"]
+        case .customText: return ["テキスト", "メモ"]
+        }
+    }
+
+    /// 「東京駅まで」「東京駅へのナビ」「東京駅に行きたい」から目的地を取り出す。
+    static func extractDestination(_ text: String) -> String? {
+        let markers = ["までのナビ", "までの案内", "までのルート", "までナビ", "まで案内", "までルート", "まで行きたい", "までいきたい", "まで連れて", "まで",
+                       "へのナビ", "への案内", "へのルート", "へナビ", "へ行きたい", "へいきたい", "に行きたい", "にいきたい", "に連れて", "へ連れて", "に向かう", "へ向かう"]
+        for marker in markers {
+            if let range = text.range(of: marker) {
+                var dest = String(text[text.startIndex..<range.lowerBound])
+                for prefix in ["ここから", "現在地から", "今から", "いまから"] where dest.hasPrefix(prefix) {
+                    dest = String(dest.dropFirst(prefix.count))
+                }
+                if dest.count >= 1 && dest.count <= 40 { return dest }
+            }
+        }
+        return nil
+    }
+
+    /// 「〇〇を検索して」「〇〇を探して」
+    static func extractSearchQuery(_ text: String) -> String? {
+        let markers = ["を検索", "をけんさく", "を探して", "をさがして", "検索して", "をしらべて", "を調べて"]
+        for marker in markers {
+            if let range = text.range(of: marker) {
+                let q = String(text[text.startIndex..<range.lowerBound])
+                if q.count >= 1 && q.count <= 40 { return q }
+            }
+        }
+        if text.hasPrefix("目的地を"), let r = text.range(of: "目的地を") {
+            let rest = String(text[r.upperBound...])
+            if let q = extractSearchQuery(rest) { return q }
+        }
+        return nil
+    }
+}
+
+extension String {
+    /// 全角英数字・記号を半角にする（Linux でも動くよう自前で変換）。
+    func applyingFullWidthToHalfWidth() -> String {
+        var scalars = String.UnicodeScalarView()
+        for scalar in unicodeScalars {
+            let v = scalar.value
+            if v >= 0xFF01 && v <= 0xFF5E, let half = Unicode.Scalar(v - 0xFEE0) {
+                scalars.append(half)
+            } else if v == 0x3000 {
+                scalars.append(" ")
+            } else {
+                scalars.append(scalar)
+            }
+        }
+        return String(scalars)
+    }
+}

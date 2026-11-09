@@ -1,0 +1,98 @@
+# iOS ビルド・シミュレータテスト・スナップショット・IPA 作成・Release 更新。
+name: ios-ci
+
+on:
+  push:
+    branches: ["**"]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test:
+    name: Build, test, IPA
+    runs-on: macos-26
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 30
+
+      - name: Select Xcode
+        run: bash scripts/select_xcode.sh
+
+      - name: Generate Xcode project (XcodeGen)
+        run: bash scripts/generate_project.sh
+
+      - name: Test on iOS Simulator
+        run: bash scripts/ci_test.sh
+
+      - name: Upload HUD snapshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hud-snapshots
+          path: build/snapshots
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Upload test logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-logs
+          path: |
+            build/logs
+            build/TestResults.xcresult
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Build unsigned IPA
+        if: github.event_name != 'pull_request'
+        run: bash scripts/build_ipa.sh dist
+
+      - name: Package for Swift Playgrounds
+        run: bash scripts/package_swiftpm.sh dist
+
+      - name: Release notes
+        run: bash scripts/release_notes.sh dist
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: hud-navigator-build
+          path: dist
+          retention-days: 30
+
+      - name: Publish release (latest / tag)
+        if: github.event_name == 'push' && (github.ref == format('refs/heads/{0}', github.event.repository.default_branch) || startsWith(github.ref, 'refs/tags/v'))
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/publish_release.sh dist
+
+  playgrounds-check:
+    # Swift Playgrounds 用 .swiftpm をそのまま xcodebuild でビルドできるか（互換性チェック）。
+    name: Swift Playgrounds package builds
+    runs-on: macos-26
+    timeout-minutes: 45
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select Xcode
+        run: bash scripts/select_xcode.sh
+      - name: List schemes
+        working-directory: HUDNavigator.swiftpm
+        run: xcodebuild -list || true
+      - name: Build .swiftpm for iOS Simulator
+        working-directory: HUDNavigator.swiftpm
+        run: |
+          set -o pipefail
+          xcodebuild -scheme "HUD Navigator" -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath ../build/PlaygroundsData CODE_SIGNING_ALLOWED=NO -quiet build 2>&1 | tail -200
