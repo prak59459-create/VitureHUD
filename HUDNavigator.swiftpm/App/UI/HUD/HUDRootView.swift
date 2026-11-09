@@ -83,6 +83,11 @@ struct HUDRootView: View {
                 if model.background == .camera && model.detectionActive && model.camera.activeSurface == surface {
                     DetectionOverlay()
                         .frame(width: size.width, height: size.height)
+                } else if model.background == .black && model.detectionActive && model.settings.detection.showsBoxesOnBlack
+                            && (surface == .external || surface == .deviceFullScreen) && model.camera.isRunning {
+                    // 黒背景：カメラ映像は出さず、検出した物の位置（おおよそ）だけ描く
+                    DetectionOverlay()
+                        .frame(width: size.width, height: size.height)
                 }
             }
 
@@ -308,7 +313,7 @@ struct DetectionOverlay: View {
     }
 
     private func label(for d: Detection, settings: DetectionSettings) -> String {
-        var text = d.label == .other ? d.rawLabel : d.label.displayName
+        var text = ObjectLabels.displayName(label: d.label, raw: d.rawLabel)
         if settings.showsConfidence { text += " \(Int(d.confidence * 100))%" }
         if settings.showsDistanceEstimate, let distance = d.approximateDistance(verticalFieldOfViewDegrees: model.camera.verticalFieldOfView) {
             text += " 約\(Int(distance.rounded()))m(目安)"

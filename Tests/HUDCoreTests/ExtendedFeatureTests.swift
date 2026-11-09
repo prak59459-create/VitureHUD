@@ -325,3 +325,14 @@ final class DisplaySettingsTests: XCTestCase {
         XCTAssertNil(s.rainExpected(withinHours: 0.5, threshold: 60, after: now))
     }
 }
+
+final class ObjectLabelTests: XCTestCase {
+    func testJapaneseLabels() {
+        XCTAssertEqual(ObjectLabels.displayName(label: .other, raw: "chair"), "椅子")
+        XCTAssertEqual(ObjectLabels.displayName(label: .car, raw: "car"), DetectionLabel.car.displayName)
+        XCTAssertEqual(ObjectLabels.displayName(label: .other, raw: "unknown-thing"), "unknown-thing")
+        XCTAssertEqual(DetectionLabel.from(identifier: "motorbike"), .motorcycle)
+        XCTAssertEqual(DetectionLabel.from(identifier: "traffic light"), .trafficLight)
+        XCTAssertEqual(BundledObjectModel(rawValue: "YOLOv3Tiny"), .yolov3Tiny)
+    }
+}

@@ -188,12 +188,14 @@ public struct CameraSettings: Codable, Hashable, Sendable {
 
 public struct DetectionSettings: Codable, Hashable, Sendable {
     public var enabled: Bool = false
-    public var minimumConfidence: Double = 0.5
+    public var minimumConfidence: Double = 0.4
     /// 1秒あたりの推論回数（省電力のため間引く）
     public var inferenceFPS: Double = 8
     public var detectsPeople: Bool = true
     public var detectsAnimals: Bool = true
     public var usesCustomModel: Bool = true
+    /// 使う物体検出モデル（内蔵の YOLOv3Tiny / YOLOv3Int8LUT、または "custom"＝読み込んだモデル）
+    public var objectModel: String = BundledObjectModel.yolov3Tiny.rawValue
     public var showsLabels: Bool = true
     public var showsConfidence: Bool = true
     public var showsDistanceEstimate: Bool = false
@@ -204,6 +206,10 @@ public struct DetectionSettings: Codable, Hashable, Sendable {
     public var detectsLanes: Bool = false
     /// 標識・看板の文字を読む（実験）
     public var readsSigns: Bool = false
+    /// 黒背景（グラスで透明）のときも、カメラ映像を出さずに認識を続ける
+    public var runsWithBlackBackground: Bool = true
+    /// 黒背景でも検出枠を HUD に描く（位置はおおよそ）
+    public var showsBoxesOnBlack: Bool = true
     public init() {}
 }
 

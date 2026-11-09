@@ -28,6 +28,10 @@ targets:
       - path: HUDNavigator.swiftpm/App
       # アプリアイコン（正式アプリのみ。Swift Playgrounds 版はプレースホルダーのアイコン）
       - path: Resources/Assets.xcassets
+      # 物体検出・距離推定の Core ML モデル（Swift Playgrounds 版と同じく、そのまま入れて端末でコンパイル）
+      - path: HUDNavigator.swiftpm/Resources/Models
+        type: folder
+        buildPhase: resources
     dependencies:
       # ホーム画面ウィジェット（build_ipa.sh が「ウィジェットなし」の IPA も作る）
       - target: HUDNavigatorWidgets

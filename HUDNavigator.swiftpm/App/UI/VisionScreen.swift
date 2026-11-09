@@ -28,6 +28,7 @@ struct VisionScreen: View {
                         }
                     }
                     VisionStatsCard()
+                    VisionDiagnosticsCard()
                     Card(title: "物体認識", systemImage: "viewfinder") {
                         Toggle("物体認識を使う", isOn: Binding(
                             get: { model.settings.detection.enabled },
@@ -72,13 +73,32 @@ struct VisionScreen: View {
                         Text("白線は輪郭から「まっすぐで斜めの線」を探す簡易的な推定です。標識は文字（止まれ・徐行・通行止め など）から種類を推定し、重要なものは HUD で知らせます。どちらも見落とし・誤認識があります。")
                             .font(.caption).foregroundStyle(.secondary)
                     }
-                    Card(title: "追加の物体検出モデル（Core ML）", systemImage: "cpu") {
-                        Text("自動車・自転車・バイクなどを検出するには、物体検出の Core ML モデル（.mlmodel）を読み込んでください。モデルのライセンス（商用利用・再配布の条件）はご自身で確認してください。")
+                    Card(title: "物体検出モデル（アプリに内蔵）", systemImage: "cpu") {
+                        Toggle("物体検出モデルを使う（80 種類）", isOn: $model.settings.detection.usesCustomModel)
+                        Picker("モデル", selection: $model.settings.detection.objectModel) {
+                            ForEach(BundledObjectModel.allCases, id: \.self) { Text($0.displayName).tag($0.rawValue) }
+                            if let name = model.vision.customModelName {
+                                Text("読み込んだモデル（\(name)）").tag("custom")
+                            }
+                        }
+                        if let m = BundledObjectModel(rawValue: model.settings.detection.objectModel) {
+                            Text(m.detail).font(.caption).foregroundStyle(.secondary)
+                        }
+                        if !model.vision.objectModelStatus.isEmpty {
+                            Text(model.vision.objectModelStatus).font(.caption)
+                        }
+                        Toggle("黒背景（グラスで透明）でも認識する", isOn: $model.settings.detection.runsWithBlackBackground)
+                        Toggle("黒背景でも検出枠を HUD に描く（位置はおおよそ）", isOn: $model.settings.detection.showsBoxesOnBlack)
+                        Text(BundledObjectModel.credit).font(.caption2).foregroundStyle(.secondary)
+                        Divider()
+                        Text("別の物体検出モデル（.mlmodel）も読み込めます。モデルのライセンスはご自身で確認してください。")
                             .font(.caption).foregroundStyle(.secondary)
                         if let name = model.vision.customModelName {
                             Label("読み込み済み：\(name)", systemImage: "checkmark.circle").foregroundStyle(.green)
-                            Toggle("このモデルを使う", isOn: $model.settings.detection.usesCustomModel)
-                            Button("モデルを削除", role: .destructive) { model.vision.removeCustomModel() }
+                            Button("読み込んだモデルを削除", role: .destructive) {
+                                model.vision.removeCustomModel()
+                                if model.settings.detection.objectModel == "custom" { model.settings.detection.objectModel = BundledObjectModel.yolov3Tiny.rawValue }
+                            }
                         }
                         Button {
                             importing = true
@@ -112,7 +132,35 @@ struct VisionScreen: View {
         }
         .fileImporter(isPresented: $importing, allowedContentTypes: [UTType(filenameExtension: "mlmodel") ?? .data, .data]) { result in
             if case .success(let url) = result {
-                Task { await model.vision.importModel(from: url) }
+                Task {
+                    await model.vision.importModel(from: url)
+                    if model.vision.customModelName != nil { model.settings.detection.objectModel = "custom" }
+                }
+            }
+        }
+    }
+}
+
+/// 認識が動いているかを確かめる（フレームが届いているか・推論が動いているか・エラー）
+struct VisionDiagnosticsCard: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { _ in
+            let stats = model.vision.engine.stats
+            let cam = model.camera
+            Card(title: "動作の確認", systemImage: "stethoscope") {
+                LabeledContent("物体認識", value: model.detectionActive ? "オン" : (model.settings.detection.hasAcceptedDisclaimer ? "オフ" : "注意事項の同意がまだです"))
+                LabeledContent("カメラ", value: cam.isRunning ? "動作中（\(cam.activeSurface == nil ? "映像なし" : "映像あり")）" : "停止中")
+                LabeledContent("届いたフレーム", value: "\(cam.pipeline.frameCount)")
+                LabeledContent("認識に回したフレーム", value: "\(stats.framesRun) / \(stats.framesSeen)")
+                LabeledContent("直前の検出数", value: "\(stats.lastCount)")
+                LabeledContent("物体検出モデル", value: stats.hasObjectModel ? "読み込み済み" : "なし")
+                if let e = stats.lastError { Text("エラー：\(e)").font(.caption).foregroundStyle(UIStyle.warning) }
+                if let e = cam.lastError { Text("カメラ：\(e)").font(.caption).foregroundStyle(UIStyle.warning) }
+                if !model.detectionActive {
+                    Text("上の「物体認識を使う」をオンにしてください。").font(.caption).foregroundStyle(.secondary)
+                }
             }
         }
     }

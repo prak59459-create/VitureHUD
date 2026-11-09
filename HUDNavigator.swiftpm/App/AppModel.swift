@@ -99,6 +99,7 @@ final class AppModel {
     @ObservationIgnored var movingSince: Date?
     @ObservationIgnored var lastMovingAt: Date?
     @ObservationIgnored var lastSyncFingerprint: Int?
+    @ObservationIgnored var headlessCameraHeld = false
     @ObservationIgnored var arrivedAt: Date?
     @ObservationIgnored var savedScreenBrightness: CGFloat?
     @ObservationIgnored var syncExportTask: Task<Void, Never>?
@@ -192,7 +193,10 @@ final class AppModel {
 
     var background: BackgroundMode {
         get { activePreset.background }
-        set { updateActivePreset { $0.background = newValue } }
+        set {
+            updateActivePreset { $0.background = newValue }
+            refreshServices()
+        }
     }
 
     var features: FeatureToggles {
@@ -243,6 +247,7 @@ final class AppModel {
         if old.detection != settings.detection {
             vision.attach(to: camera, enabled: detectionActive)
             vision.configure(settings: settings.detection, inferenceFPS: powerProfile.inferenceFPS)
+            refreshServices()
         }
         if old.camera.zoom != settings.camera.zoom || old.camera.exposureBias != settings.camera.exposureBias {
             camera.applySettings()
@@ -319,6 +324,13 @@ final class AppModel {
         // AirPods の頭の向き（HUD を空間に固定する設定のとき）
         let wantsHead = settings.display.headLockWithAirPods && isHUDVisible
         if wantsHead { motion.startHeadphoneTracking() } else { motion.stopHeadphoneTracking() }
+
+        // 黒背景（グラスで透明）でも物体認識するときは、映像を出さずにカメラを動かす
+        let wantsHeadless = isHUDVisible && background != .camera && detectionActive && settings.detection.runsWithBlackBackground
+        if wantsHeadless != headlessCameraHeld {
+            headlessCameraHeld = wantsHeadless
+            if wantsHeadless { camera.acquireHeadless() } else { camera.releaseHeadless() }
+        }
     }
 
     private func applyPowerProfile() {

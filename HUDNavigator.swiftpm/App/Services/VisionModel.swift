@@ -19,6 +19,15 @@ struct RoadResult: Sendable {
 
 /// Vision / Core ML の推論（専用キューで実行）。
 final class DetectionEngine: @unchecked Sendable {
+    /// 動作の記録（診断用）
+    struct Stats: Sendable {
+        var framesSeen = 0
+        var framesRun = 0
+        var lastCount = 0
+        var lastError: String?
+        var hasObjectModel = false
+    }
+
     struct Config: Sendable {
         var minInterval: TimeInterval = 0.125
         var detectPeople = true
@@ -40,6 +49,14 @@ final class DetectionEngine: @unchecked Sendable {
     private var customModel: VNCoreMLModel?
     private var lastLaneRun = Date.distantPast
     private var lastSignRun = Date.distantPast
+    private var _stats = Stats()
+
+    var stats: Stats {
+        lock.lock(); defer { lock.unlock() }
+        var s = _stats
+        s.hasObjectModel = customModel != nil
+        return s
+    }
 
     var onResults: (@Sendable ([Detection], _ inferenceSeconds: Double) -> Void)?
     var onRoadResult: (@Sendable (RoadResult) -> Void)?
@@ -57,6 +74,7 @@ final class DetectionEngine: @unchecked Sendable {
     func process(_ buffer: CVPixelBuffer) {
         let now = Date()
         lock.lock()
+        _stats.framesSeen += 1
         let cfg = _config
         let model = customModel
         guard !busy, now.timeIntervalSince(lastRun) >= cfg.minInterval else { lock.unlock(); return }
@@ -71,12 +89,17 @@ final class DetectionEngine: @unchecked Sendable {
         queue.async { [weak self] in
             guard let self else { return }
             let start = Date()
-            let detections = Self.run(buffer: buffer, config: cfg, customModel: model, time: now)
+            let (detections, error) = Self.run(buffer: buffer, config: cfg, customModel: model, time: now)
             let elapsed = Date().timeIntervalSince(start)
             var road = RoadResult()
             if doLanes { road.lanes = Self.detectLanes(buffer) }
             if doSigns { road.signs = Self.readSigns(buffer) }
-            self.lock.lock(); self.busy = false; self.lock.unlock()
+            self.lock.lock()
+            self.busy = false
+            self._stats.framesRun += 1
+            self._stats.lastCount = detections.count
+            if let error { self._stats.lastError = error }
+            self.lock.unlock()
             self.onResults?(detections, elapsed)
             if doLanes || doSigns { self.onRoadResult?(road) }
         }
@@ -119,7 +142,7 @@ final class DetectionEngine: @unchecked Sendable {
         return result
     }
 
-    private static func run(buffer: CVPixelBuffer, config: Config, customModel: VNCoreMLModel?, time: Date) -> [Detection] {
+    private static func run(buffer: CVPixelBuffer, config: Config, customModel: VNCoreMLModel?, time: Date) -> ([Detection], String?) {
         var requests: [VNRequest] = []
         let human = VNDetectHumanRectanglesRequest()
         human.upperBodyOnly = false
@@ -133,9 +156,9 @@ final class DetectionEngine: @unchecked Sendable {
             custom = r
             requests.append(r)
         }
-        guard !requests.isEmpty else { return [] }
+        guard !requests.isEmpty else { return ([], "認識する種類がすべてオフです") }
         let handler = VNImageRequestHandler(cvPixelBuffer: buffer, orientation: .up, options: [:])
-        do { try handler.perform(requests) } catch { return [] }
+        do { try handler.perform(requests) } catch { return ([], error.localizedDescription) }
 
         var result: [Detection] = []
         func box(_ bb: CGRect) -> NormalizedRect {
@@ -161,7 +184,7 @@ final class DetectionEngine: @unchecked Sendable {
                 result.append(Detection(label: mapped, rawLabel: label.identifier, confidence: Double(label.confidence), box: box(o.boundingBox), timestamp: time))
             }
         }
-        return result
+        return (result, nil)
     }
 }
 
@@ -175,6 +198,10 @@ final class VisionModel {
     private(set) var lastInferenceMs: Double = 0
     private(set) var customModelName: String?
     private(set) var modelStatus: String?
+    /// 使っている物体検出モデルの状態（内蔵 YOLO の準備など）
+    private(set) var objectModelStatus = ""
+    @ObservationIgnored private var loadedObjectModel: String?
+    @ObservationIgnored private var objectModelTask: Task<Void, Never>?
     private(set) var totalDetections = 0
     private(set) var isActive = false
     private(set) var lanes: [LineSegment] = []
@@ -209,6 +236,7 @@ final class VisionModel {
         c.detectAnimals = settings.detectsAnimals
         c.minimumConfidence = settings.minimumConfidence
         c.useCustomModel = settings.usesCustomModel
+        selectObjectModel(settings.objectModel, enabled: settings.usesCustomModel && isActive)
         c.detectsLanes = settings.detectsLanes
         c.readsSigns = settings.readsSigns
         // 省電力のときは路面・文字の解析も間引く
@@ -238,9 +266,9 @@ final class VisionModel {
         isActive = enabled
         if enabled {
             let engine = self.engine
-            camera.pipeline.frameHandler = { buffer in engine.process(buffer) }
+            camera.pipeline.setFrameHandler({ buffer in engine.process(buffer) }, for: "vision")
         } else {
-            camera.pipeline.frameHandler = nil
+            camera.pipeline.setFrameHandler(nil, for: "vision")
             lanes = []
             signs = []
             detections = []
@@ -276,12 +304,49 @@ final class VisionModel {
 
     private func loadSavedModel() {
         guard FileManager.default.fileExists(atPath: compiledModelURL.path) else { return }
-        do {
-            let ml = try MLModel(contentsOf: compiledModelURL)
-            engine.setCustomModel(try VNCoreMLModel(for: ml))
-            customModelName = (try? String(contentsOf: modelNameURL, encoding: .utf8)) ?? "カスタムモデル"
-        } catch {
-            modelStatus = "保存済みモデルを読み込めません: \(error.localizedDescription)"
+        customModelName = (try? String(contentsOf: modelNameURL, encoding: .utf8)) ?? "カスタムモデル"
+    }
+
+    /// 物体検出モデルを選ぶ（内蔵の YOLOv3 / 読み込んだモデル）。初回は端末でコンパイルする。
+    func selectObjectModel(_ name: String, enabled: Bool) {
+        guard enabled else {
+            if loadedObjectModel != nil {
+                objectModelTask?.cancel()
+                engine.setCustomModel(nil)
+                loadedObjectModel = nil
+            }
+            objectModelStatus = "物体検出モデルは使っていません（人・動物の内蔵検出のみ）"
+            return
+        }
+        guard name != loadedObjectModel else { return }
+        loadedObjectModel = name
+        objectModelTask?.cancel()
+        engine.setCustomModel(nil)
+        if name == "custom" {
+            do {
+                let ml = try MLModel(contentsOf: compiledModelURL)
+                engine.setCustomModel(try VNCoreMLModel(for: ml))
+                objectModelStatus = "読み込んだモデル「\(customModelName ?? "")」を使用中"
+            } catch {
+                objectModelStatus = "読み込んだモデルを使えません：\(error.localizedDescription)"
+                loadedObjectModel = nil
+            }
+            return
+        }
+        let display = BundledObjectModel(rawValue: name)?.displayName ?? name
+        objectModelStatus = "「\(display)」を準備中…（初回は数十秒かかることがあります）"
+        objectModelTask = Task { [weak self] in
+            do {
+                let ml = try await ModelStore.load(named: name)
+                let vn = try VNCoreMLModel(for: ml)
+                guard let self, !Task.isCancelled, self.loadedObjectModel == name else { return }
+                self.engine.setCustomModel(vn)
+                self.objectModelStatus = "「\(display)」で 80 種類を検出中"
+            } catch {
+                guard let self, self.loadedObjectModel == name else { return }
+                self.objectModelStatus = "「\(display)」を読み込めません：\(error.localizedDescription)"
+                self.loadedObjectModel = nil
+            }
         }
     }
 
@@ -301,9 +366,11 @@ final class VisionModel {
             let ml = try MLModel(contentsOf: compiledModelURL)
             let vn = try VNCoreMLModel(for: ml)
             engine.setCustomModel(vn)
+            loadedObjectModel = "custom"
             let name = url.deletingPathExtension().lastPathComponent
             try? name.write(to: modelNameURL, atomically: true, encoding: .utf8)
             customModelName = name
+            objectModelStatus = "読み込んだモデル「\(name)」を使用中"
             modelStatus = "「\(name)」を読み込みました。物体検出モデル（VNRecognizedObjectObservation を出力するもの）のみ使えます。"
         } catch {
             modelStatus = "モデルを読み込めません: \(error.localizedDescription)"
@@ -311,7 +378,10 @@ final class VisionModel {
     }
 
     func removeCustomModel() {
-        engine.setCustomModel(nil)
+        if loadedObjectModel == "custom" {
+            engine.setCustomModel(nil)
+            loadedObjectModel = nil
+        }
         try? FileManager.default.removeItem(at: compiledModelURL)
         try? FileManager.default.removeItem(at: modelNameURL)
         customModelName = nil

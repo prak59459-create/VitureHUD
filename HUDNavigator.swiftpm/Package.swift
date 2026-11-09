@@ -46,7 +46,11 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "AppModule",
-            path: "."
+            path: ".",
+            resources: [
+                // 物体検出モデル（YOLOv3・パブリックドメイン）。初回起動時に端末でコンパイルして使う
+                .copy("Resources/Models")
+            ]
         )
     ]
 )

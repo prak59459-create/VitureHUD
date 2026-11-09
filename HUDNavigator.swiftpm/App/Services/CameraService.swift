@@ -13,15 +13,21 @@ final class CameraPipeline: NSObject, AVCaptureVideoDataOutputSampleBufferDelega
     private var rotationCoordinator: AVCaptureDevice.RotationCoordinator?
     private var rotationObservation: NSKeyValueObservation?
     private let lock = NSLock()
-    private var _frameHandler: (@Sendable (CVPixelBuffer) -> Void)?
+    private var _frameHandlers: [String: @Sendable (CVPixelBuffer) -> Void] = [:]
+    private var _frameCount = 0
 
     /// 映像の情報（横縦比・縦の画角・回転角）が変わったとき
     var onFormat: (@Sendable (_ aspect: Double, _ verticalFOV: Double, _ rotation: Double) -> Void)?
     var onRunningChange: (@Sendable (Bool, String?) -> Void)?
 
-    var frameHandler: (@Sendable (CVPixelBuffer) -> Void)? {
-        get { lock.lock(); defer { lock.unlock() }; return _frameHandler }
-        set { lock.lock(); _frameHandler = newValue; lock.unlock() }
+    /// フレームを受け取る処理（物体認識・距離推定など、複数を同時に登録できる）
+    func setFrameHandler(_ handler: (@Sendable (CVPixelBuffer) -> Void)?, for key: String) {
+        lock.lock(); _frameHandlers[key] = handler; lock.unlock()
+    }
+
+    /// これまでに届いたフレーム数（診断用）
+    var frameCount: Int {
+        lock.lock(); defer { lock.unlock() }; return _frameCount
     }
 
     /// 接続されている外部カメラ（iPad の USB-C カメラ。iPhone では見つからない）
@@ -153,8 +159,12 @@ final class CameraPipeline: NSObject, AVCaptureVideoDataOutputSampleBufferDelega
     }
 
     func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
-        guard let handler = frameHandler, let buffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
-        handler(buffer)
+        lock.lock()
+        _frameCount += 1
+        let handlers = Array(_frameHandlers.values)
+        lock.unlock()
+        guard !handlers.isEmpty, let buffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
+        for handler in handlers { handler(buffer) }
     }
 }
 
@@ -177,6 +187,9 @@ final class CameraController {
 
     @ObservationIgnored let pipeline = CameraPipeline()
     @ObservationIgnored private var surfaces: [HUDSurface: Int] = [:]
+    /// 映像を表示せずにカメラを動かす依頼の数（黒背景での物体認識・距離推定）
+    private(set) var headlessCount = 0
+    @ObservationIgnored private var wantsRunning = false
     @ObservationIgnored private var profile = (fps: 30, maxHeight: 1080)
     @ObservationIgnored var settingsProvider: (() -> CameraSettings)?
 
@@ -197,7 +210,18 @@ final class CameraController {
         refreshAuthorization()
     }
 
-    var isInUse: Bool { activeSurface != nil }
+    var isInUse: Bool { activeSurface != nil || headlessCount > 0 }
+
+    /// 映像を出さずにカメラを使う（グラスの黒背景のまま認識するとき）
+    func acquireHeadless() {
+        headlessCount += 1
+        updateActiveSurface()
+    }
+
+    func releaseHeadless() {
+        headlessCount = max(0, headlessCount - 1)
+        updateActiveSurface()
+    }
 
     func refreshAuthorization() {
         switch AVCaptureDevice.authorizationStatus(for: .video) {
@@ -223,7 +247,7 @@ final class CameraController {
     func applyPowerProfile(fps: Int, maxHeight: Int) {
         guard profile.fps != fps || profile.maxHeight != maxHeight else { return }
         profile = (fps, maxHeight)
-        if isRunning || activeSurface != nil { configureAndStart() }
+        if isRunning || wantsRunning { configureAndStart() }
     }
 
     func applySettings() {
@@ -234,9 +258,11 @@ final class CameraController {
 
     private func updateActiveSurface() {
         let next = surfaces.keys.filter { $0 != .thumbnail }.max { $0.cameraPriority < $1.cameraPriority }
-        guard next != activeSurface else { return }
-        activeSurface = next
-        if next != nil {
+        if next != activeSurface { activeSurface = next }
+        let want = next != nil || headlessCount > 0
+        guard want != wantsRunning else { return }
+        wantsRunning = want
+        if want {
             Task { await startIfAllowed() }
         } else {
             pipeline.stop()
@@ -253,7 +279,7 @@ final class CameraController {
             lastError = "カメラが許可されていません（設定アプリで許可してください）"
             return
         }
-        guard activeSurface != nil else { return }
+        guard wantsRunning else { return }
         configureAndStart()
     }
 
@@ -268,7 +294,7 @@ final class CameraController {
 
     /// 設定変更（超広角の切り替えなど）を反映
     func reconfigure() {
-        guard activeSurface != nil else { return }
+        guard wantsRunning else { return }
         configureAndStart()
     }
 }
