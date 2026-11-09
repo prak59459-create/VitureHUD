@@ -58,6 +58,13 @@ struct DisplayStatusCard: View {
             case .local:
                 Text("VITURE を USB-C でつなぐと HUD を表示します。グラスがなくても「HUD を表示」で端末画面に表示できます。")
                     .font(.subheadline).foregroundStyle(.secondary)
+                Button {
+                    model.selectedTab = .settings
+                    model.settingsPath = [.display]
+                } label: {
+                    Label("つないでいるのに「未接続」のとき", systemImage: "questionmark.circle")
+                }
+                .font(.subheadline)
             case .mirror:
                 Text("端末の画面がそのままグラスに映っています。HUD を全画面にして、端末を横向きにするとグラスいっぱいに表示されます。")
                     .font(.subheadline).foregroundStyle(.secondary)

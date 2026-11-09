@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import AVFoundation
 import Observation
 
 /// 外部ディスプレイ（VITURE）への出力方式。
@@ -57,6 +58,11 @@ final class DisplayManager {
     private(set) var events: [String] = []
     /// 外部ディスプレイのシーンを自分で作れたか（Swift Playgrounds 内では作れない場合がある）
     private(set) var attachedViaFallback = false
+    /// どの手がかりでグラスを見つけたか（画面表示用）
+    private(set) var detectionReason = ""
+    /// 自動で見つからないときに「つないでいる」とみなす（設定）
+    @ObservationIgnored var assumeConnected: (() -> Bool)?
+    @ObservationIgnored private var pollTimer: Timer?
 
     @ObservationIgnored private var externalWindow: UIWindow?
     @ObservationIgnored private weak var externalScene: UIWindowScene?
@@ -88,10 +94,27 @@ final class DisplayManager {
             Task { @MainActor in
                 try? await Task.sleep(nanoseconds: 300_000_000)
                 self?.considerFallback(scene)
+                self?.refresh()
             }
         })
-        refresh()
+        observers.append(center.addObserver(forName: UIScene.didDisconnectNotification, object: nil, queue: .main) { [weak self] _ in
+            Task { @MainActor in self?.refresh() }
+        })
+        // 音声の出力先が変わった（グラスのスピーカー・DisplayPort の音声）
+        observers.append(center.addObserver(forName: AVAudioSession.routeChangeNotification, object: nil, queue: .main) { [weak self] _ in
+            Task { @MainActor in self?.refresh() }
+        })
+        // 通知が来ない環境のため、2 秒ごとにも確認する（軽い処理）
+        pollTimer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                self?.attachFallbackIfNeeded()
+                self?.refresh()
+            }
+        }
         attachFallbackIfNeeded()
+        refresh()
+        // 起動前からつながっていた場合も、接続時の処理を行う
+        if mode != .local { onModeChange?(mode) }
     }
 
     // MARK: - 外部シーン
@@ -100,7 +123,8 @@ final class DisplayManager {
     func attach(windowScene: UIWindowScene, viaFallback: Bool = false) {
         guard externalScene !== windowScene else { return }
         let window = UIWindow(windowScene: windowScene)
-        let content = makeHUDView?() ?? AnyView(Color.black)
+        // 起動直後（AppModel の準備前）に接続された場合も HUD を出す
+        let content = makeHUDView?() ?? AnyView(HUDRootView(surface: .external).environment(AppModel.shared))
         let host = UIHostingController(rootView: content)
         host.view.backgroundColor = .black
         window.rootViewController = host
@@ -143,30 +167,112 @@ final class DisplayManager {
         }
     }
 
+    /// 端末本体の画面
+    private var deviceScreen: UIScreen { UIScreen.main }
+
+    /// いくつかの手がかりを組み合わせてグラスの接続を判断する。
+    /// iOS 16 以降、UIScreen.screens だけでは外部画面が見えない場合があるため。
     func refresh() {
-        let screens = UIScreen.screens
-        hasExternalScreen = screens.count > 1
+        let device = deviceScreen
+        var reasons: [String] = []
+        var external: UIScreen?
+        // 1. 本体以外の画面にあるシーン（独立表示のシーン・拡張ディスプレイ上のウィンドウ）
+        for case let scene as UIWindowScene in UIApplication.shared.connectedScenes where scene.screen !== device {
+            if external == nil { external = scene.screen }
+            reasons.append(scene.session.role == .windowExternalDisplayNonInteractive ? "外部画面のシーン" : "外部画面上のウィンドウ")
+        }
+        // 2. 画面の一覧（従来の方法）
+        if let s = UIScreen.screens.first(where: { $0 !== device }) {
+            if external == nil { external = s }
+            reasons.append("画面の一覧に外部画面")
+        }
+        // 3. 画面の複製（ミラー表示・画面収録・AirPlay でも ON になる）
+        if isDeviceScreenCaptured { reasons.append("画面の複製中") }
+        // 4. 音声の出力先（DisplayPort の音声・グラスのスピーカー）
+        if let audio = externalAudioOutput { reasons.append("音声の出力先：\(audio)") }
+        // 5. 手動
+        let assumed = assumeConnected?() ?? false
+        if assumed && reasons.isEmpty { reasons.append("手動で「接続中」に設定") }
+
+        hasExternalScreen = external != nil
         let newMode: DisplayOutputMode
         if externalScene != nil {
             newMode = .independent
-        } else if hasExternalScreen {
+        } else if !reasons.isEmpty {
             newMode = .mirror
-            if let external = screens.last {
+        } else {
+            newMode = .local
+        }
+        if externalScene == nil {
+            if let external {
                 externalScreenSize = external.bounds.size
                 externalNativeSize = external.nativeBounds.size
                 externalMaximumFPS = external.maximumFramesPerSecond
+            } else {
+                externalScreenSize = nil
+                externalNativeSize = nil
+                externalMaximumFPS = nil
             }
-        } else {
-            newMode = .local
-            externalScreenSize = nil
-            externalNativeSize = nil
-            externalMaximumFPS = nil
         }
+        let reasonText = reasons.joined(separator: "・")
+        if reasonText != detectionReason { detectionReason = reasonText }
         if newMode != mode {
             mode = newMode
-            log("出力モード: \(newMode.displayName)")
+            log("出力モード: \(newMode.displayName)\(reasonText.isEmpty ? "" : "（\(reasonText)）")")
             onModeChange?(newMode)
         }
+    }
+
+    private var isDeviceScreenCaptured: Bool {
+        let appScenes = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .filter { $0.session.role == .windowApplication }
+        if appScenes.contains(where: { $0.traitCollection.sceneCaptureState == .active }) { return true }
+        return deviceScreen.isCaptured
+    }
+
+    /// グラスらしい音声の出力先（なければ nil）
+    private var externalAudioOutput: String? {
+        for output in AVAudioSession.sharedInstance().currentRoute.outputs {
+            let name = output.portName
+            let lower = name.lowercased()
+            if lower.contains("viture") || lower.contains("displayport") { return name }
+            if output.portType == .HDMI { return name }
+        }
+        return nil
+    }
+
+    /// 接続の診断（設定画面に表示・コピーして報告できる）
+    func diagnosticLines() -> [String] {
+        let device = deviceScreen
+        var lines: [String] = []
+        lines.append("判定：\(mode.displayName)\(detectionReason.isEmpty ? "" : "（\(detectionReason)）")")
+        lines.append("画面の一覧（UIScreen.screens）：\(UIScreen.screens.count)")
+        for (i, s) in UIScreen.screens.enumerated() {
+            lines.append("  [\(i)] \(Int(s.bounds.width))×\(Int(s.bounds.height))pt・実\(Int(s.nativeBounds.width))×\(Int(s.nativeBounds.height))・\(s.maximumFramesPerSecond)Hz\(s === device ? "・本体" : "・外部")\(s.isCaptured ? "・複製中" : "")")
+        }
+        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+        lines.append("シーン：\(scenes.count)")
+        for scene in scenes {
+            let role: String
+            switch scene.session.role {
+            case .windowApplication: role = "アプリ"
+            case .windowExternalDisplayNonInteractive: role = "外部画面"
+            default: role = scene.session.role.rawValue
+            }
+            let capture: String
+            switch scene.traitCollection.sceneCaptureState {
+            case .active: capture = "複製中"
+            case .inactive: capture = "複製なし"
+            default: capture = "不明"
+            }
+            lines.append("  \(role)：\(Int(scene.screen.bounds.width))×\(Int(scene.screen.bounds.height))\(scene.screen === device ? "・本体の画面" : "・外部の画面")・ウィンドウ\(scene.windows.count)・\(capture)")
+        }
+        let outputs = AVAudioSession.sharedInstance().currentRoute.outputs
+        lines.append("音声の出力先：" + (outputs.isEmpty ? "なし" : outputs.map { "\($0.portName)（\($0.portType.rawValue)）" }.joined(separator: "、")))
+        lines.append("独立表示のシーン：\(externalScene == nil ? "なし" : "あり\(attachedViaFallback ? "（フォールバック）" : "")")")
+        lines.append("実行環境：\(DeviceTestModel.environment.displayName)")
+        return lines
     }
 
     private func log(_ message: String) {

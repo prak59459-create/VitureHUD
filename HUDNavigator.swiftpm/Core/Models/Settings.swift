@@ -333,6 +333,8 @@ public struct HUDDisplaySettings: Codable, Hashable, Sendable {
     public var headLockStrength: Double = 40
     /// グラスに独立表示中、端末の画面を暗くする
     public var dimsDeviceScreen: Bool = true
+    /// 自動で見つからない場合に「グラスをつないでいる」とみなす
+    public var assumesGlassesConnected: Bool = false
     public init() {}
 
     /// 時刻と昼夜から、今の明るさを求める

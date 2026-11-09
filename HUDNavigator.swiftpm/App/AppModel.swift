@@ -165,6 +165,7 @@ final class AppModel {
             AnyView(HUDRootView(surface: .external).environment(AppModel.shared))
         }
         display.onModeChange = { [unowned self] mode in self.displayModeChanged(mode) }
+        display.assumeConnected = { [unowned self] in self.settings.display.assumesGlassesConnected }
         display.start()
 
         if settings.showsMetricsOverlay { metrics.start() }
@@ -250,6 +251,7 @@ final class AppModel {
         if old.proactive != settings.proactive { advisor.settings = settings.proactive }
         if old.bluetooth.heartRateEnabled != settings.bluetooth.heartRateEnabled || old.display != settings.display { refreshServices() }
         if old.display.dimsDeviceScreen != settings.display.dimsDeviceScreen { updateDeviceScreenDimming() }
+        if old.display.assumesGlassesConnected != settings.display.assumesGlassesConnected { display.refresh() }
         if old.showsMetricsOverlay != settings.showsMetricsOverlay {
             if settings.showsMetricsOverlay { metrics.start() } else if !deviceTest.isRecordingMetrics { metrics.stop() }
         }

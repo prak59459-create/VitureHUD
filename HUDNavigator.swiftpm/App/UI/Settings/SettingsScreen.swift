@@ -90,6 +90,7 @@ struct SettingsScreen: View {
 
 struct DisplaySettingsView: View {
     @Environment(AppModel.self) private var model
+    @State private var diagnostics: [String] = []
 
     var body: some View {
         @Bindable var model = model
@@ -97,6 +98,9 @@ struct DisplaySettingsView: View {
         Form {
             Section("状態") {
                 LabeledContent("出力", value: display.mode.displayName)
+                if !display.detectionReason.isEmpty {
+                    LabeledContent("見つけた方法", value: display.detectionReason)
+                }
                 if let size = display.externalScreenSize {
                     LabeledContent("グラスの画面", value: "\(Int(size.width))×\(Int(size.height)) pt")
                 }
@@ -135,6 +139,24 @@ struct DisplaySettingsView: View {
             } footer: {
                 Text("黒（#000000）はグラス上で透明になります。視認性テストで、読める文字サイズ・色を確かめてください。")
             }
+            Section {
+                Toggle("グラスをつないでいる（自動で見つからない場合）", isOn: $model.settings.display.assumesGlassesConnected)
+                Button("もう一度確認する") {
+                    display.refresh()
+                    diagnostics = display.diagnosticLines()
+                }
+                ForEach(diagnostics, id: \.self) { Text($0).font(.caption.monospaced()) }
+                if !diagnostics.isEmpty {
+                    Button("診断をコピー（報告用）") {
+                        UIPasteboard.general.string = diagnostics.joined(separator: "\n")
+                        model.showToast("コピーしました")
+                    }
+                }
+            } header: {
+                Text("接続の診断")
+            } footer: {
+                Text("つないでいるのに「グラス未接続」になる場合は、「もう一度確認する」の結果をコピーして送ってください。スイッチをオンにすると、自動で見つからなくてもグラス接続中として動きます（HUD を全画面で表示します）。")
+            }
             if !display.events.isEmpty {
                 Section("接続の記録") {
                     ForEach(display.events.reversed(), id: \.self) { Text($0).font(.caption.monospaced()) }
@@ -142,6 +164,7 @@ struct DisplaySettingsView: View {
             }
         }
         .navigationTitle("外部ディスプレイ")
+        .onAppear { diagnostics = model.display.diagnosticLines() }
     }
 }
 
