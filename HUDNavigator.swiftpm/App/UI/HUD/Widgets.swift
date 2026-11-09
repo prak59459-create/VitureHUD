@@ -724,12 +724,14 @@ struct HeadPoseWidget: View {
             let w = geo.size.width, h = geo.size.height
             let r = min(w, h) * 0.38
             ZStack {
-                Circle().stroke(ctx.secondary, lineWidth: 1.5).frame(width: r * 2, height: r * 2)
-                Path { p in
-                    p.move(to: CGPoint(x: w / 2 - r, y: h / 2)); p.addLine(to: CGPoint(x: w / 2 + r, y: h / 2))
-                    p.move(to: CGPoint(x: w / 2, y: h / 2 - r)); p.addLine(to: CGPoint(x: w / 2, y: h / 2 + r))
+                if pose != nil {
+                    Circle().stroke(ctx.secondary, lineWidth: 1.5).frame(width: r * 2, height: r * 2)
+                    Path { p in
+                        p.move(to: CGPoint(x: w / 2 - r, y: h / 2)); p.addLine(to: CGPoint(x: w / 2 + r, y: h / 2))
+                        p.move(to: CGPoint(x: w / 2, y: h / 2 - r)); p.addLine(to: CGPoint(x: w / 2, y: h / 2 + r))
+                    }
+                    .stroke(ctx.secondary.opacity(0.5), lineWidth: 1)
                 }
-                .stroke(ctx.secondary.opacity(0.5), lineWidth: 1)
                 if let pose {
                     let x = (pose.yaw / 45).clamped(to: -1...1) * Double(r)
                     let y = (-pose.pitch / 45).clamped(to: -1...1) * Double(r)
@@ -740,9 +742,15 @@ struct HeadPoseWidget: View {
                         .foregroundStyle(ctx.text)
                         .position(x: w / 2, y: h - ctx.typography.size(0.1))
                 } else {
-                    Text(model.settings.headTracking.source == .off ? "頭の動き：オフ" : "待機中")
-                        .font(ctx.typography.font(0.14, weight: .medium))
-                        .foregroundStyle(ctx.secondary)
+                    VStack(spacing: 4) {
+                        Image(systemName: "move.3d").font(.system(size: ctx.typography.size(0.3)))
+                            .foregroundStyle(ctx.accent)
+                        Text(model.settings.headTracking.source == .off ? "頭の動き：オフ" : "頭の向きを待っています")
+                            .font(ctx.typography.font(0.14, weight: .medium))
+                            .foregroundStyle(ctx.secondary)
+                            .multilineTextAlignment(.center)
+                    }
+                    .frame(width: w, height: h)
                 }
             }
         }
