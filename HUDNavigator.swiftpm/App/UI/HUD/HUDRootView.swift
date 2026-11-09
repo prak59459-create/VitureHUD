@@ -239,6 +239,7 @@ struct HUDAlertLayer: View {
                 ForEach(model.alerts.visible) { alert in
                     HStack(spacing: 8) {
                         Image(systemName: icon(alert))
+                            .font(.system(size: fontSize, weight: .bold))
                         VStack(alignment: .leading, spacing: 2) {
                             Text(alert.title).font(.system(size: fontSize, weight: .bold, design: .rounded))
                             if !alert.message.isEmpty {

@@ -17,7 +17,8 @@ struct WidgetContentView: View {
         case .battery: BatteryWidget(ctx: ctx)
         case .speed: SpeedWidget(ctx: ctx)
         case .compass: CompassWidget(ctx: ctx)
-        case .miniMap: MiniMapWidget(ctx: ctx)
+        case .miniMap:
+            if surface == .thumbnail { SchematicMiniMap(ctx: ctx) } else { MiniMapWidget(ctx: ctx) }
         case .weather: WeatherWidget(ctx: ctx)
         case .temperature: TemperatureWidget(ctx: ctx)
         case .precipitation: PrecipitationWidget(ctx: ctx)
@@ -228,6 +229,64 @@ struct MiniMapWidget: View {
         guard let sample else { return .userLocation(fallback: .automatic) }
         let camera = MapCamera(centerCoordinate: sample.coordinate.clCoordinate, distance: ctx.config.mapSpanMeters * 2.2, heading: heading, pitch: use3D ? 50 : 0)
         return .camera(camera)
+    }
+}
+
+/// 軽量な簡易ミニマップ（サムネイル・スナップショット用。MapKit を使わずルートと現在地だけを描く）
+struct SchematicMiniMap: View {
+    @Environment(AppModel.self) private var model
+    let ctx: WidgetContext
+
+    var body: some View {
+        let route = model.navigation.activeRoute
+        let center = model.location.lastSample?.coordinate ?? model.navigation.progress?.snappedCoordinate ?? route?.polyline.first
+        let heading = model.settings.map.orientation == .headingUp ? (model.navigation.progress?.routeBearing ?? model.location.heading ?? 0) : 0
+        let span = ctx.config.mapSpanMeters * 2.2
+        Canvas { context, size in
+            let gridColor = ctx.secondary.opacity(0.18)
+            for i in 1..<4 {
+                let x = size.width * Double(i) / 4
+                let y = size.height * Double(i) / 4
+                var grid = Path()
+                grid.move(to: CGPoint(x: x, y: 0)); grid.addLine(to: CGPoint(x: x, y: size.height))
+                grid.move(to: CGPoint(x: 0, y: y)); grid.addLine(to: CGPoint(x: size.width, y: y))
+                context.stroke(grid, with: .color(gridColor), lineWidth: 1)
+            }
+            guard let center else { return }
+            let metersPerPoint = span / max(1, min(size.width, size.height))
+            let rad = -heading * .pi / 180
+            func project(_ c: GeoCoordinate) -> CGPoint {
+                let dx = (c.longitude - center.longitude) * cos(center.latitude * .pi / 180) * 111_320
+                let dy = (c.latitude - center.latitude) * 110_540
+                let rx = dx * cos(rad) - dy * sin(rad)
+                let ry = dx * sin(rad) + dy * cos(rad)
+                return CGPoint(x: size.width / 2 + rx / metersPerPoint, y: size.height / 2 - ry / metersPerPoint)
+            }
+            if let route, route.polyline.count > 1 {
+                var path = Path()
+                path.move(to: project(route.polyline[0]))
+                for p in route.polyline.dropFirst() { path.addLine(to: project(p)) }
+                context.stroke(path, with: .color(ctx.accent), style: StrokeStyle(lineWidth: 5, lineCap: .round, lineJoin: .round))
+                if let dest = route.destination {
+                    let d = project(dest)
+                    context.fill(Path(ellipseIn: CGRect(x: d.x - 7, y: d.y - 7, width: 14, height: 14)), with: .color(ctx.warning))
+                }
+            }
+            var arrow = Path()
+            let c = CGPoint(x: size.width / 2, y: size.height / 2)
+            arrow.move(to: CGPoint(x: c.x, y: c.y - 12))
+            arrow.addLine(to: CGPoint(x: c.x + 9, y: c.y + 10))
+            arrow.addLine(to: CGPoint(x: c.x, y: c.y + 4))
+            arrow.addLine(to: CGPoint(x: c.x - 9, y: c.y + 10))
+            arrow.closeSubpath()
+            context.fill(arrow, with: .color(ctx.text))
+        }
+        .clipShape(RoundedRectangle(cornerRadius: max(4, ctx.style.cornerRadius * 0.7), style: .continuous))
+        .overlay(alignment: .bottomLeading) {
+            if center == nil {
+                Text("現在地を取得中…").font(ctx.typography.font(0.07)).foregroundStyle(ctx.secondary).padding(6)
+            }
+        }
     }
 }
 
