@@ -45,6 +45,8 @@ public struct DepthSettings: Codable, Hashable, Sendable {
     public var showsObjectDistance: Bool = true
     /// 近くの物を知らせる
     public var obstacleAlerts: Bool = true
+    /// 近い物を音で知らせる（駐車センサーのように、近いほど速く鳴る・左右の位置も音で）
+    public var proximityBeeps: Bool = false
     /// この距離（m）より近いと知らせる
     public var obstacleDistance: Double = 1.5
     /// これより遠い値は使わない（m）

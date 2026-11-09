@@ -215,6 +215,8 @@ final class VisionModel {
     @ObservationIgnored private var evaluator = HazardEvaluator()
     @ObservationIgnored private var recentTimes: [Date] = []
     @ObservationIgnored var onHazard: ((HazardAssessment) -> Void)?
+    /// 枠の中の距離（m）を測る（AppModel が距離の推定につなぐ）
+    @ObservationIgnored var distanceProvider: ((NormalizedRect) -> Double?)?
     @ObservationIgnored var onNewDetections: ((Int) -> Void)?
 
     var highestHazard: HazardLevel { hazards.map(\.level).max() ?? .none }
@@ -281,7 +283,12 @@ final class VisionModel {
     private func handle(_ new: [Detection], seconds: Double) {
         guard isActive else { return }
         let now = Date()
-        detections = tracker.update(new, at: now)
+        let measured = new.map { d -> Detection in
+            var d = d
+            d.measuredDistance = distanceProvider?(d.box)
+            return d
+        }
+        detections = tracker.update(measured, at: now)
         hazards = evaluator.assess(tracker: tracker, now: now)
         lastInferenceMs = seconds * 1000
         totalDetections += new.count

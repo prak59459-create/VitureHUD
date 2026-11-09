@@ -41,6 +41,7 @@ extension AppModel {
         depth.geometry = { [unowned self] in (self.motion.cameraPitchDown, self.camera.verticalFieldOfView) }
         depth.onObstacle = { [unowned self] o in self.postObstacle(o) }
         depth.attach(to: camera, settings: settings.depth, enabled: settings.depth.enabled)
+        vision.distanceProvider = { [unowned self] box in self.depth.distance(for: box) }
         // 頭の動き
         if settings.display.headLockWithAirPods && settings.headTracking.source == .off {
             // 旧設定（AirPods で空間固定）を引き継ぐ
@@ -428,6 +429,8 @@ extension AppModel {
             merged.assistant.cloudConsentGiven = settings.assistant.cloudConsentGiven
             merged.googleMaps.consentGiven = settings.googleMaps.consentGiven
             merged.bluetooth = settings.bluetooth
+            merged.headTracking.rememberedSensorID = settings.headTracking.rememberedSensorID
+            merged.headTracking.rememberedSensorName = settings.headTracking.rememberedSensorName
             merged.sync = settings.sync
             merged.sync.lastImportedAt = Date()
             settings = merged

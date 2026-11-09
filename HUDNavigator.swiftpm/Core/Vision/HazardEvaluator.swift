@@ -7,6 +7,8 @@ public struct ObjectTracker: Sendable {
         public var label: DetectionLabel
         public var history: [(time: Date, box: NormalizedRect)]
         public var lastSeen: Date
+        /// 測った距離の履歴（m）
+        public var distances: [(time: Date, meters: Double)] = []
 
         public static func == (lhs: Track, rhs: Track) -> Bool { lhs.id == rhs.id && lhs.lastSeen == rhs.lastSeen }
         public func hash(into hasher: inout Hasher) { hasher.combine(id) }
@@ -36,6 +38,10 @@ public struct ObjectTracker: Sendable {
             if let id = bestID, var track = tracks[id] {
                 track.history.append((time, det.box))
                 if track.history.count > maxHistory { track.history.removeFirst(track.history.count - maxHistory) }
+                if let m = det.measuredDistance {
+                    track.distances.append((time, m))
+                    if track.distances.count > maxHistory { track.distances.removeFirst(track.distances.count - maxHistory) }
+                }
                 track.lastSeen = time
                 tracks[id] = track
                 used.insert(id)
@@ -43,7 +49,8 @@ public struct ObjectTracker: Sendable {
             } else {
                 let id = nextID
                 nextID += 1
-                tracks[id] = Track(id: id, label: det.label, history: [(time, det.box)], lastSeen: time)
+                tracks[id] = Track(id: id, label: det.label, history: [(time, det.box)], lastSeen: time,
+                                   distances: det.measuredDistance.map { [(time, $0)] } ?? [])
                 used.insert(id)
                 d.trackID = id
             }
@@ -86,6 +93,10 @@ public struct HazardAssessment: Hashable, Sendable {
     public var centrality: Double
     public var box: NormalizedRect
     public var reason: String
+    /// 測った距離（m）
+    public var distance: Double? = nil
+    /// 近づく速さ（m/秒、近づくとプラス）
+    public var closingSpeed: Double? = nil
 }
 
 /// 枠の拡大速度から「近づいてくる物体」を推定する（実験機能・安全装置ではない）。
@@ -145,6 +156,25 @@ public struct HazardEvaluator: Sendable {
             }
         }
 
+        // 測った距離があれば、近づく速さから接触までの時間を求める（枠の大きさより正確）
+        var distance: Double?
+        var closingSpeed: Double?
+        if let lastD = track.distances.last, now.timeIntervalSince(lastD.time) < 0.8 {
+            distance = lastD.meters
+            let recentD = track.distances.filter { lastD.time.timeIntervalSince($0.time) <= 1.0 }
+            if recentD.count >= 2, let firstD = recentD.first {
+                let dt = lastD.time.timeIntervalSince(firstD.time)
+                if dt >= 0.25 {
+                    let v = (firstD.meters - lastD.meters) / dt
+                    closingSpeed = v
+                    if v > 0.3 {
+                        let t = lastD.meters / v
+                        ttc = min(ttc ?? .infinity, t)
+                    }
+                }
+            }
+        }
+
         var level = HazardLevel.none
         var reason = ""
         if let t = ttc {
@@ -157,6 +187,14 @@ public struct HazardEvaluator: Sendable {
             level = max(level, .medium)
             if reason.isEmpty { reason = "前方の近くにいます" }
         }
+        // 測った距離がとても近い
+        if let d = distance, centrality > 0.3 {
+            if d < 0.8 { level = max(level, track.label.hazardWeight >= 0.6 ? .high : .medium) }
+            else if d < 1.5 { level = max(level, .medium) }
+            else if d < 3 { level = max(level, .low) }
+            let dText = "約\(String(format: "%.1f", d))m"
+            reason = reason.isEmpty ? dText : "\(dText)・\(reason)"
+        }
         // 中央から外れているものは1段階下げる
         if centrality < 0.25, level > .none {
             level = HazardLevel(rawValue: level.rawValue - 1) ?? .none
@@ -166,6 +204,7 @@ public struct HazardEvaluator: Sendable {
             level = .medium
         }
         guard level > .none else { return nil }
-        return HazardAssessment(trackID: track.id, label: track.label, level: level, timeToContact: ttc, centrality: centrality, box: box, reason: reason)
+        return HazardAssessment(trackID: track.id, label: track.label, level: level, timeToContact: ttc, centrality: centrality, box: box, reason: reason,
+                                distance: distance, closingSpeed: closingSpeed)
     }
 }

@@ -89,8 +89,10 @@ public struct Detection: Codable, Hashable, Identifiable, Sendable {
     public var timestamp: Date
     /// 追跡ID（ObjectTracker が付与）
     public var trackID: Int?
+    /// 測った距離（m）：LiDAR・2 つのカメラ・AI の奥行きから。測れないときは nil
+    public var measuredDistance: Double?
 
-    public init(id: UUID = UUID(), label: DetectionLabel, rawLabel: String? = nil, confidence: Double, box: NormalizedRect, timestamp: Date, trackID: Int? = nil) {
+    public init(id: UUID = UUID(), label: DetectionLabel, rawLabel: String? = nil, confidence: Double, box: NormalizedRect, timestamp: Date, trackID: Int? = nil, measuredDistance: Double? = nil) {
         self.id = id
         self.label = label
         self.rawLabel = rawLabel ?? label.rawValue
@@ -98,6 +100,7 @@ public struct Detection: Codable, Hashable, Identifiable, Sendable {
         self.box = box
         self.timestamp = timestamp
         self.trackID = trackID
+        self.measuredDistance = measuredDistance
     }
 
     /// 距離の目安（m）。カメラの縦画角と代表的な高さから概算するだけで、正確ではない。

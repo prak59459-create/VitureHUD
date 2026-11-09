@@ -128,6 +128,7 @@ final class DepthService {
     private(set) var isRunning = false
 
     @ObservationIgnored let ai = AIDepthEngine()
+    @ObservationIgnored let beeper = ProximityBeeper()
     @ObservationIgnored private var detector = ObstacleDetector()
     @ObservationIgnored private var settings = DepthSettings()
     @ObservationIgnored private var aiLoadTask: Task<Void, Never>?
@@ -172,6 +173,7 @@ final class DepthService {
             camera.pipeline.setFrameHandler(nil, for: "depth")
             camera.pipeline.setDepthHandler(nil)
             camera.setDepthSensor(nil)
+            beeper.silence()
             grid = nil
             obstacle = nil
             activeSource = nil
@@ -261,6 +263,20 @@ final class DepthService {
         let o = detector.update(g, cameraPitchDown: pitch, verticalFOV: fov, height: settings.cameraHeight)
         obstacle = o
         if let o, settings.obstacleAlerts { onObstacle?(o) }
+        if settings.proximityBeeps, let o {
+            beeper.update(distance: o.distance, x: o.x, threshold: settings.obstacleDistance)
+        } else {
+            beeper.silence()
+        }
+    }
+
+    /// 3D スキャン中（ARKit がカメラを使う間）の中央の距離
+    private(set) var externalCenter: Double?
+    @ObservationIgnored private var externalCenterAt = Date.distantPast
+
+    func ingestExternalCenter(_ d: Double?) {
+        externalCenter = d
+        externalCenterAt = Date()
     }
 
     /// 枠（正規化座標）の中の距離（m）。測れていなければ nil
@@ -269,9 +285,10 @@ final class DepthService {
         return Double(v)
     }
 
-    /// 画面中央の距離
+    /// 画面中央の距離（3D スキャン中は ARKit の値）
     var centerDistance: Double? {
-        distance(for: NormalizedRect(x: 0.45, y: 0.45, width: 0.1, height: 0.1))
+        if let e = externalCenter, Date().timeIntervalSince(externalCenterAt) < 1.5 { return e }
+        return distance(for: NormalizedRect(x: 0.45, y: 0.45, width: 0.1, height: 0.1))
     }
 
     var isFresh: Bool { lastUpdate.map { Date().timeIntervalSince($0) < 2 } ?? false }

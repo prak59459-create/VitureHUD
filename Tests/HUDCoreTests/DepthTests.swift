@@ -106,3 +106,32 @@ final class DepthTests: XCTestCase {
         XCTAssertEqual(AICommandCodec.command(name: "setDepth", value: "true"), .setDepth(true))
     }
 }
+
+final class MeasuredHazardTests: XCTestCase {
+    func testClosingSpeedFromMeasuredDistance() throws {
+        var tracker = ObjectTracker()
+        let t0 = Date(timeIntervalSince1970: 1000)
+        let box = NormalizedRect(x: 0.42, y: 0.4, width: 0.16, height: 0.2)
+        // 同じ大きさの枠のまま（枠からは接近が分からない）、測った距離だけ 3m → 2m に近づく
+        for (i, d) in [3.0, 2.6, 2.3, 2.0].enumerated() {
+            let t = t0.addingTimeInterval(Double(i) * 0.25)
+            _ = tracker.update([Detection(label: .car, confidence: 0.9, box: box, timestamp: t, measuredDistance: d)], at: t)
+        }
+        let now = t0.addingTimeInterval(0.75)
+        let a = try XCTUnwrap(HazardEvaluator().assess(tracker: tracker, now: now).first)
+        XCTAssertEqual(a.distance ?? 0, 2.0, accuracy: 1e-9)
+        XCTAssertEqual(a.closingSpeed ?? 0, 4.0 / 3.0, accuracy: 1e-6, "1m を 0.75 秒")
+        XCTAssertEqual(a.timeToContact ?? 0, 1.5, accuracy: 1e-6)
+        XCTAssertEqual(a.level, .medium, "1.5 秒ちょうどは警戒")
+        XCTAssertTrue(a.reason.contains("約2.0m"))
+    }
+
+    func testVeryCloseMeasuredObjectIsHigh() throws {
+        var tracker = ObjectTracker()
+        let t = Date()
+        let box = NormalizedRect(x: 0.45, y: 0.45, width: 0.1, height: 0.1)
+        _ = tracker.update([Detection(label: .bicycle, confidence: 0.9, box: box, timestamp: t, measuredDistance: 0.6)], at: t)
+        let a = try XCTUnwrap(HazardEvaluator().assess(tracker: tracker, now: t).first)
+        XCTAssertEqual(a.level, .high)
+    }
+}

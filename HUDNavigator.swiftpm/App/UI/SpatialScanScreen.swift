@@ -557,5 +557,7 @@ struct SpatialScanScreen: View {
             model.camera.setSuspendedForAR(false)
         }
         .sheet(item: $share) { ShareSheet(url: $0.url) }
+        // グラスの HUD（距離ウィジェット・照準）にも中央の距離を出す
+        .onChange(of: scanner.centerDistance) { _, d in model.depth.ingestExternalCenter(d) }
     }
 }

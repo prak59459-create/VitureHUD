@@ -554,6 +554,7 @@ struct DepthSettingsCard: View {
             Toggle("中央の照準と距離", isOn: $model.settings.depth.showsReticle)
             Toggle("検出した物に距離を付ける", isOn: $model.settings.depth.showsObjectDistance)
             Toggle("近くの物を知らせる", isOn: $model.settings.depth.obstacleAlerts)
+            Toggle("近い物を音で知らせる（近いほど速く鳴る・左右も音で）", isOn: $model.settings.depth.proximityBeeps)
             LabeledSlider(title: "知らせる距離", value: $model.settings.depth.obstacleDistance, range: 0.5...4, format: { String(format: "%.1f m", $0) })
             Text("AI 推定は「地面がどう見えるか」から m に直すので、端末を少し下に向けて地面が映るようにすると正確になります。何の物か分からなくても、近い物はすべて知らせます。距離は目安です。")
                 .font(.caption).foregroundStyle(.secondary)
