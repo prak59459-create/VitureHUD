@@ -10,7 +10,7 @@
 | MapKit（地図・検索・ルート・ETA） | ナビ | 無料。アプリ単位の利用量制限・スロットリングあり。公共交通は ETA のみ |
 | AVSpeechSynthesizer | 音声案内 | 無料・オフライン |
 | SFSpeechRecognizer（端末内認識） | 音声入力 | 端末内認識の対応言語・端末に依存【要実機検証】 |
-| Swift Playgrounds | UI 試作（任意） | 無料 |
+| Swift Playgrounds | iPad での日常テスト（回数無制限） | 無料 |
 | **GitHub Actions**（ホストランナー、ubuntu / macOS） | ビルド・テスト・IPA 作成 | **公開リポジトリは無料**。同時実行数・ジョブ時間に上限あり。リポジトリを非公開にすると無料枠の分数制になり macOS は消費が大きい【要確認】 |
 | GitHub Releases | IPA 配布 | 無料（公開されることに注意） |
 | XcodeGen | プロジェクト生成（CI 上） | 無料（MIT ライセンス） |

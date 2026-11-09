@@ -7,6 +7,7 @@
 | # | 質問 | 回答（2026-11-09） | 反映 |
 |---|------|-------------------|------|
 | Q2 | iPhone 15 へのインストール方法 | **AltStore で検証する。実機検証は週7回程度なので、大半は GitHub Actions で済ませる** | [13_ci_altstore_pipeline.md](13_ci_altstore_pipeline.md) を追加し、全資料を改訂 |
+| Q11 | Swift Playgrounds を今後も使うか | **回数無制限の Swift Playgrounds でたくさんテストし、最後に IPA にしたり機能追加したりする。または Windows で** | Playgrounds と CI の両対応構成に変更（[05](05_file_structure.md)、[13](13_ci_altstore_pipeline.md) §0・§9） |
 
 ## 未回答
 
@@ -21,8 +22,8 @@
 | Q8 | クラウドAIを使う場合、**APIキーの取得とテキスト送信** は許容できますか？ | 不可ならアシスタントは端末内のルールベースのみ |
 | Q9 | 表示言語は日本語のみでよいですか？ | 文字列カタログの設計 |
 | Q10 | Phase 0（CI構築＋スパイク）から始める進め方でよいですか？ | 承認後に最初のコード（CI ワークフローと検証用ビルド）を書き始める |
-| Q11 | **Swift Playgrounds は今後も使いますか？**（iPad 上でコードを直接編集したいか） | 使わないなら `.swiftpm` 互換を考えず、XcodeGen 構成に一本化できる（推奨） |
-| Q12 | **AltServer を動かす PC（Mac / Windows）** はありますか？ それとも PC なしで AltStore を使っていますか？ | 7日ごとの署名更新の方法、Release の入れ替え手順 |
+| Q12 | Q11 の「Windows で」は、**Windows PC で AltServer を動かす（署名更新・IPA インストール）** という意味ですか？ それとも **Windows でコードを編集する** という意味ですか？（両方でも可） | Windows での作業手順を用意するか |
+| Q16 | Swift Playgrounds で **自分でもコードを編集しますか？** それとも「最新版を開いて試すだけ」ですか？ | 編集する場合、iPad → GitHub への戻し方（Working Copy・Windows 経由など）を決める |
 | Q13 | 「週7回」は **1週間あたりのインストール（入れ替え）回数の上限** という意味で合っていますか？ | 実機テストの回数配分（[13](13_ci_altstore_pipeline.md) §6） |
 | Q14 | AltStore で使う Apple ID は **無料アカウント** ですか？ 他にも AltStore で入れているアプリはありますか？ | 同時アプリ数の上限に余裕があるか |
 | Q15 | PR の確認（スナップショット画像を見て OK を出す）は iPad / iPhone の GitHub アプリやブラウザで行う想定でよいですか？ | 見た目の確認を CI 画像で済ませる運用 |

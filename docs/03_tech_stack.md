@@ -7,7 +7,7 @@
 | ビルド・テスト | **GitHub Actions**（`ubuntu-latest`＋`macos-26`、Xcode 26 系を固定） | 公開リポジトリは無料。Mac 不要（[13](13_ci_altstore_pipeline.md)） |
 | プロジェクト生成 | **XcodeGen**（`project.yml` → `.xcodeproj`、CI 上で生成） | Info.plist・権限・シーン設定をテキストで管理できる |
 | 実機インストール | **AltStore**（無料 Apple ID で署名、7日ごとに更新） | iPad A16・iPhone 15 の両方に入れられる |
-| 補助ツール | Swift Playgrounds（任意） | iPad 上での UI 試作のみ |
+| iPad での日常テスト | **Swift Playgrounds**（同じソースの `.swiftpm` を開く） | 回数無制限で iPad 実機テスト（[13](13_ci_altstore_pipeline.md) §0） |
 | 言語 | Swift 6（言語モード 6） | 厳格な並行性チェックでデータ競合を防ぐ |
 | テスト | XCTest（`HUDCore` は Linux / macOS、アプリは iOS シミュレータ） | CI で自動実行 |
 | UI | SwiftUI（主）＋ UIKit（外部ディスプレイのシーン管理、カメラプレビュー） | SwiftUI だけでは外部画面シーンを細かく制御できないため |

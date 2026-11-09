@@ -1,19 +1,50 @@
 # 13. ビルド・検証パイプライン（GitHub Actions ＋ AltStore）
 
-改訂：2026-11-09（ユーザー指示「検証は AltStore を使うが週7回程度なので、大半は GitHub Actions で済ませる」を反映）
+改訂：2026-11-09
+- ユーザー指示「検証は AltStore を使うが週7回程度なので、大半は GitHub Actions で済ませる」を反映
+- Q11 回答「回数無制限の Swift Playgrounds でたくさんテストし、最後に IPA にしたり機能追加したりする。または Windows で」を反映 → **§0 の3ループ構成**
+
+## 0. 3つの検証ループ（回数の制限が少ない順）
+
+```mermaid
+flowchart LR
+    subgraph L1["ループ1：Swift Playgrounds（iPad A16・回数無制限）"]
+        P1["最新の .swiftpm を開く"] --> P2["実行・VITURE接続・カメラ・センサーを試す"]
+        P2 --> P3["小さな修正はその場で編集"]
+        P3 --> P2
+    end
+    subgraph L2["ループ2：GitHub Actions（回数無制限・自動）"]
+        C1["ロジックテスト(Linux)"] --> C2["iOSビルド・シミュレータテスト・スナップショット(macOS)"]
+    end
+    subgraph L3["ループ3：AltStore IPA（週7回まで）"]
+        A1["Release IPA"] --> A2["iPad / iPhone 15 に正式インストール"]
+        A2 --> A3["Playgrounds で確認できない項目だけ確認"]
+    end
+    L1 -- "変更をリポジトリへ戻す" --> L2
+    L2 -- "まとまったら" --> L3
+```
+
+| ループ | 回数 | 主に確認すること |
+|--------|------|------------------|
+| 1. Swift Playgrounds（iPad） | **無制限** | HUD の見た目・操作感、VITURE（ミラー表示）での視認性、カメラ背景、センサー値、MapKit、音声 — **iPad で動くものはほぼ全部ここで先に試す** |
+| 2. GitHub Actions | 無制限（自動） | ロジックの正しさ、iOS ビルドが壊れていないか、見た目の回帰（スナップショット） |
+| 3. AltStore IPA | **週7回まで** | **iPhone 15 での動作**（Playgrounds は iPhone 非対応）、外部ディスプレイの独立表示、ショートカット、バックグラウンド動作など **正式アプリでしか動かない機能** |
+
+### Windows PC の使いどころ（任意）
+- **AltServer for Windows**：AltStore の7日ごとの署名更新・IPA インストール
+- コード編集（VS Code 等）と GitHub への push
+- ロジック部分（`HUDCore`）は Swift for Windows でテスト可能【要動作確認】。**iOS アプリのビルドは Windows ではできない**（GitHub Actions の macOS で行う）
 
 ## 1. 方針の変更点
 
 | 項目 | 旧計画 | 新計画 |
 |------|--------|--------|
-| ビルド | iPad の Swift Playgrounds | **GitHub Actions（macOS ランナー＋Xcode）** |
-| プロジェクト形式 | `.swiftpm`（Playgrounds 用） | **XcodeGen の `project.yml` から `.xcodeproj` を CI で生成**＋Linux でもテストできる Swift Package `HUDCore` |
-| 実機インストール | Playgrounds 内実行／TestFlight（有料） | **CI が作った未署名 IPA を AltStore で署名・インストール**（無料 Apple ID） |
-| iPhone 15 対応 | 有料 Program か Mac が必要 | **AltStore で iPad / iPhone の両方にインストール可能** |
-| テスト | アプリ内セルフテストのみ | **XCTest（Linux＋iOS シミュレータ）＋ スナップショット画像＋ 実機チェックリスト** |
-| 実機検証の回数 | 制約なし | **週7回程度まで** → 実機でしか分からない項目だけをまとめて確認 |
-
-Swift Playgrounds は「iPad 上で UI をちょっと試す」任意の道具に位置づけを下げる（[Q11](12_open_questions.md)）。
+| ビルド | iPad の Swift Playgrounds のみ | **Swift Playgrounds（試作・日常テスト）＋ GitHub Actions（正式ビルド）の両対応** |
+| プロジェクト形式 | `.swiftpm`（Playgrounds 用） | **同じソースを `.swiftpm`（Playgrounds 用）と XcodeGen `project.yml`（CI 用）の両方から参照**（§9） |
+| 実機インストール | Playgrounds 内実行／TestFlight（有料） | Playgrounds 内実行（iPad・無制限）＋ **CI が作った未署名 IPA を AltStore で署名・インストール** |
+| iPhone 15 対応 | 有料 Program か Mac が必要 | **AltStore で iPhone にインストール** |
+| テスト | アプリ内セルフテストのみ | **XCTest（Linux＋iOS シミュレータ）＋ スナップショット画像＋ Playgrounds での手動確認＋ 実機チェックリスト** |
+| 実機検証の回数 | 制約なし | IPA は **週7回程度まで** → 正式アプリでしか分からない項目だけ |
 
 ## 2. これで解消・改善する制約
 
@@ -110,6 +141,52 @@ Xcode のバージョンは `xcode-select` で固定し、ランナーイメー�
 - リポジトリ・Release・アーティファクトは **公開** される。APIキー・個人情報（自宅周辺の GPX など）を含めない。
 - テスト用 GPX は架空ルートか公共の場所のみで作る。実機テストレポートの位置情報は、Issue に貼る前に丸める（アプリの書き出し機能で既定ON）。
 - サードパーティ製 Action は最小限にし、使う場合はコミット SHA で固定する。
+
+## 9. 1つのソースを Swift Playgrounds と CI の両方でビルドする設計
+
+### 9-1. 構成
+
+```
+VitureHUD/
+├── Package.swift                 ← Linux/Windows/CI 用：HUDCore をテストするためだけのパッケージ
+│                                    （target HUDCore の path = "HUDNavigator.swiftpm/Core"）
+├── Tests/HUDCoreTests/           ← ロジックテスト
+├── project.yml                   ← XcodeGen：CI で正式アプリ（IPA）をビルド
+│                                    （sources = HUDNavigator.swiftpm/Core と /App）
+└── HUDNavigator.swiftpm/         ← iPad の Swift Playgrounds でそのまま開くアプリ
+    ├── Package.swift             ← Playgrounds 用（AppleProductTypes、Capabilities）
+    ├── Core/                     ← 純粋ロジック（Foundation のみ）
+    └── App/                      ← SwiftUI / UIKit / AVFoundation など
+```
+
+- **ソースは1か所（`HUDNavigator.swiftpm/` の中）だけ**。3つのビルド定義（Playgrounds 用・テスト用・CI 用）がそれを参照する → 二重管理にならない。
+- Playgrounds では Core と App が1つのモジュールになるため、App から `import HUDCore` は書かない（CI 側も同じく1モジュールでビルドする）。テストだけが `@testable import HUDCore` を使う。
+
+### 9-2. 正式ビルドでしか動かない機能の切り分け
+
+CI（XcodeGen）側だけにコンパイル条件 `FULL_BUILD` を設定し、Playgrounds で問題になりうる機能を分ける。
+
+| 機能 | Playgrounds 実行時 | 正式ビルド（IPA） |
+|------|-------------------|------------------|
+| 外部ディスプレイ | ミラー表示（独立表示も試み、ダメなら自動でミラー） | 独立表示 |
+| 権限説明 | Playgrounds の Capabilities 設定 | `project.yml` の Info.plist |
+| Core ML モデル | 実行時コンパイル（`MLModel.compileModel`） | ビルド時コンパイル済みを使用 |
+| App Intents（ショートカット） | `#if FULL_BUILD` で無効 | 有効 |
+| バックグラウンド動作 | 無効（前面のみ） | Info.plist で有効化 |
+
+### 9-3. Playgrounds とリポジトリの間の受け渡し
+
+| 方向 | 方法 |
+|------|------|
+| リポジトリ → iPad | CI が毎回 **`HUDNavigator.swiftpm.zip` を作ってアーティファクト／Release に添付** → iPad の Safari でダウンロード → ファイルアプリで展開 → Swift Playgrounds で開く |
+| iPad → リポジトリ（自分で直した場合） | (a) 直した内容を GitHub Issue / チャットに貼る（小さい修正向け）、(b) iPad の Git クライアント（Working Copy 等、push は有料機能の可能性あり）、(c) Windows PC にファイルを移して push |
+
+Playgrounds で試した結果（OK/NG・気づき）は、アプリの「実機テストモード」の JSON 書き出しで共有できる（IPA と同じ仕組み）。
+
+### 9-4. 両対応を守るための CI チェック
+
+- `HUDNavigator.swiftpm` を **そのまま `xcodebuild` でビルドできるか** を CI で確認する【要検証：S0-P】。できない場合も、少なくとも「Playgrounds の Swift 言語版・最低 iOS 版で使えない API を使っていないか」を確認する。
+- `project.yml` と `.swiftpm/Package.swift` の権限設定（カメラ・位置・マイク等）が一致しているかをスクリプトで確認する。
 
 ## 参照
 - [macOS 26 が GitHub ホストランナーで一般提供（GitHub Changelog）](https://github.blog/changelog/2026-02-26-macos-26-is-now-generally-available-for-github-hosted-runners/)

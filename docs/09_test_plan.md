@@ -10,7 +10,8 @@
 | ② サービス結合テスト | モックを使った AppState・CommandBus・DisplayManager の状態遷移、ナビ（GPX再生）、検出パイプライン（固定画像・動画） | **GitHub Actions：macOS / iOS シミュレータ** | XCTest |
 | ③ スナップショット | HUD・テーマ・プリセット・各ウィジェットの見た目（1920×1080、iPad、iPhone 15 サイズ、黒背景） | **GitHub Actions：macOS** | `ImageRenderer` で PNG 化 → 基準画像と比較、差分 PNG をアーティファクトに保存。ユーザーは PR 上で画像を確認できる |
 | ④ ネットワーク依存テスト | MapKit 検索・ルート、Open-Meteo | GitHub Actions：nightly（PR をブロックしない） | XCTest |
-| ⑤ 実機テスト | 外部ディスプレイ、カメラ、発熱、視認性、屋外GPS、マイク | **AltStore でインストールした実機（週7回まで）** | アプリ内「実機テストモード」のチェックリスト＋計測 → JSON レポートを書き出して Issue に添付（本書 §4） |
+| ⑤ iPad 実機（Playgrounds） | VITURE（ミラー表示）での視認性、カメラ、センサー、MapKit、音声、発熱の傾向 | **iPad の Swift Playgrounds（回数無制限）** | CI が作る `.swiftpm.zip` を開いて実行。実機テストモードで記録 |
+| ⑥ 正式アプリ実機（IPA） | iPhone 15 全般、外部ディスプレイの独立表示、ショートカット、バックグラウンド、長時間の発熱・電池 | **AltStore でインストール（週7回まで）** | アプリ内「実機テストモード」のチェックリスト＋計測 → JSON レポートを書き出して Issue に添付（本書 §4） |
 
 **PR のマージ条件：** ①〜③ が全て成功していること。
 

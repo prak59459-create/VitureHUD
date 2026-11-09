@@ -16,16 +16,18 @@
 ## 1. 結論（先に要点）
 
 1. **HUDの中核（黒背景HUD・カメラ背景・自由配置パネル・MapKitナビ・センサー・音声案内）は、通常のiOS APIで実現可能（A〜B）。** 無料で作れる範囲が大きい。
-2. **開発の進め方：このリポジトリ → GitHub Actions（macOS＋Xcode）でビルド・テスト → 未署名 IPA を AltStore で iPad / iPhone にインストール。**
-   - リポジトリは公開なので GitHub ホストランナー（macOS 含む）は無料。
-   - Swift Playgrounds 由来の制約（Info.plist 編集不可、XCTest 不可、App Intents 不明など）の多くが解消する。
-   - **iPhone 15 にも AltStore でインストールできる**ため、有料 Apple Developer Program や Mac は必須ではなくなる。
-3. **実機検証は週7回までに抑える。** ロジック・見た目（スナップショット画像）・記録データでの回帰テストは CI で行い、実機は「VITURE表示・カメラ・GPS・発熱・音声認識」などハードウェアでしか分からない項目だけをまとめて確認する。
+2. **開発の進め方は3つの検証ループ**（[13](13_ci_altstore_pipeline.md) §0）：
+   - **Swift Playgrounds（iPad・回数無制限）**：VITURE・カメラ・センサー・MapKit・音声など iPad で動くものは、まずここでたくさん試す。
+   - **GitHub Actions（自動・無制限）**：ロジックテスト、iOS ビルド、見た目のスナップショット。リポジトリは公開なので macOS ランナーも無料。
+   - **AltStore IPA（週7回まで）**：iPhone 15 での動作と、正式アプリでしか動かない機能（外部ディスプレイの独立表示、ショートカット、バックグラウンド）を確認。
+   - ソースは1か所で、Swift Playgrounds 用 `.swiftpm` と CI 用の両方からビルドする（二重管理しない）。
+   - **iPhone 15 にも AltStore でインストールできる**ため、有料 Apple Developer Program や Mac は必須ではない。Windows PC は AltServer（署名更新）や編集に使える。
+3. **IPA の実機検証は週7回までに抑える。** iPad で試せることは Playgrounds、ロジックと見た目は CI で済ませ、IPA は「iPhone 15」と「正式アプリ限定の機能」の確認に使う。
 4. **外部ディスプレイの独立表示（端末＝操作、グラス＝HUD）は、通常アプリとしてインストールすれば動く可能性が高い**【要実機検証】。念のため「ミラーリングでも成立するHUD設計」は維持する（黒背景＝透明なので黒帯も問題にならない）。
 5. **端末内の生成AI（Apple Foundation Models / Apple Intelligence）は iPad A16・iPhone 15 のどちらでも使えない**【確認済】。AIアシスタントは「端末内ルールベース音声コマンド（無料）」＋「任意のクラウドLLM（ユーザーのAPIキー）」の二段構成。
 6. **VITURE Pro 2 は実在する製品**【確認済：2026年8月発表、1920×1080/片目 Micro-OLED、最大1600nit、カメラなし、約63g】。iOS アプリから頭部トラッキング値を取得する公開APIは確認できない【未確認】。
 7. **無料 Apple ID ＋ AltStore の制約**：署名は7日で失効、同時インストール数・App ID 登録数に上限 → **アプリは1本・App Extension なし**で設計する。CloudKit・WeatherKit など有料アカウント限定の機能は引き続き代替手段で対応。
-8. 「Swift Playgrounds 6」は公開情報で確認できなかった（最新確認版は 4.7）。新方針では Swift Playgrounds は任意の補助ツール扱い（[Q11](12_open_questions.md)）。
+8. 「Swift Playgrounds 6」は公開情報で確認できなかった（最新確認版は 4.7）。どの版でも動くよう、Playgrounds 側では特殊な機能を使わない（正式ビルド限定の機能は `FULL_BUILD` で切り分け）。
 
 ## 2. 分類の集計（詳細は [02_feasibility_matrix.md](02_feasibility_matrix.md)）
 
@@ -54,7 +56,7 @@ Phase 7  最適化・iPhone 15 実機検証
 ## 4. 承認チェックリスト
 
 - [ ] **ビルド・テストは GitHub Actions、実機は AltStore（週7回まで）** とする方針（[13](13_ci_altstore_pipeline.md)）
-- [ ] プロジェクトは XcodeGen（`project.yml`）＋ Linux でテストできる `HUDCore` パッケージの構成とする方針
+- [ ] ソースは `HUDNavigator.swiftpm/` の1か所に置き、Swift Playgrounds・Linux テスト・XcodeGen（CI）の3つから参照する構成とする方針（[05](05_file_structure.md)）
 - [ ] 「ミラーリングでも成立するHUD」を維持し、独立外部画面は実機で確認できたら既定にする方針
 - [ ] 地図エンジンは **MapKit を主軸**、Google Maps は任意対応とする方針
 - [ ] AIアシスタントは **ルールベース（無料・端末内）を標準**、クラウドLLMはユーザーがAPIキーを入力した場合のみ有効化する方針

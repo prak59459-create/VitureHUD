@@ -28,6 +28,8 @@ VITURE XRグラス × iPad A16 / iPhone 15 向け スマートHUDナビゲーシ
 ## 開発・検証の流れ
 
 ```
-このリポジトリ ─▶ GitHub Actions（Linuxテスト → iOSビルド・シミュレータテスト・スナップショット）
-               └▶ 未署名 IPA を GitHub Release に添付 ─▶ AltStore で iPad A16 / iPhone 15 にインストール（週7回まで）
+このリポジトリ（ソースは HUDNavigator.swiftpm/ の1か所）
+ ├─▶ Swift Playgrounds（iPad A16）… 回数無制限で試す（CI が配る .swiftpm.zip を開く）
+ ├─▶ GitHub Actions … Linuxテスト → iOSビルド・シミュレータテスト・スナップショット
+ └─▶ 未署名 IPA を GitHub Release に添付 ─▶ AltStore で iPhone 15 / iPad に正式インストール（週7回まで）
 ```
