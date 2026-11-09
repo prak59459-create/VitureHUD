@@ -57,7 +57,7 @@ final class DetectionEngine: @unchecked Sendable {
         var requests: [VNRequest] = []
         let human = VNDetectHumanRectanglesRequest()
         human.upperBodyOnly = false
-        let animal = VNDetectAnimalRectanglesRequest()
+        let animal = VNRecognizeAnimalsRequest()
         var custom: VNCoreMLRequest?
         if config.detectPeople { requests.append(human) }
         if config.detectAnimals { requests.append(animal) }

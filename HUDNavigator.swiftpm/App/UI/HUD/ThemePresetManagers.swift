@@ -143,7 +143,7 @@ struct ThemeEditorView: View {
                 LabeledSlider(title: "角丸", value: t.style.cornerRadius, range: 0...40, format: { "\(Int($0))" })
                 LabeledSlider(title: "影", value: t.style.shadowRadius, range: 0...20, format: { "\(Int($0))" })
                 LabeledSlider(title: "発光", value: t.style.glowRadius, range: 0...24, format: { "\(Int($0))" })
-                Picker("アニメーション", selection: t.style.animation) {
+                Picker("アニメーション", selection: t.style[dynamicMember: \PanelStyle.animation]) {
                     ForEach(HUDAnimationStyle.allCases, id: \.self) { Text($0.displayName).tag($0) }
                 }
             }
