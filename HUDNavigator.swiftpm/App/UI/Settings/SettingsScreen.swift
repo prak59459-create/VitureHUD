@@ -1,9 +1,10 @@
 import SwiftUI
+import UIKit
 import UniformTypeIdentifiers
 
 enum SettingsRoute: Hashable {
     case display, mapVoice, notifications, sensors, history, weather, sync, privacy, assistant, shortcuts, advanced, deviceTest, about, themes, presets, canvas
-    case googleMaps, heartRate, proactive
+    case googleMaps, heartRate, proactive, headTracking
 }
 
 struct SettingsScreen: View {
@@ -29,6 +30,7 @@ struct SettingsScreen: View {
                 Section("情報") {
                     link(.weather, "天気・環境情報", "cloud.sun")
                     link(.sensors, "センサー情報", "gyroscope")
+                    link(.headTracking, "頭の動き（ヘッドトラッキング）", "move.3d", detail: model.settings.headTracking.source.displayName)
                     link(.heartRate, "心拍計（Bluetooth）", "heart", detail: model.settings.bluetooth.heartRateEnabled ? model.heartRate.state.displayName : "オフ")
                     link(.history, "履歴・分析", "chart.xyaxis.line", detail: model.settings.history.enabled ? "記録する" : "記録しない")
                 }
@@ -82,6 +84,7 @@ struct SettingsScreen: View {
         case .googleMaps: GoogleMapsSettingsView()
         case .heartRate: HeartRateSettingsView()
         case .proactive: ProactiveSettingsView()
+        case .headTracking: HeadTrackingSettingsView()
         }
     }
 }

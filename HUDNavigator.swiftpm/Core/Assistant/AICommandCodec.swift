@@ -33,11 +33,11 @@ public enum AICommandCodec {
         - stopNavigation / （値なし）
         - searchNearby / \(categories)
         - search / 検索語
-        - setVoiceGuidance, setDetection, setHazardAlerts, setNightDim, setStereo3D, setRecording / true | false
+        - setVoiceGuidance, setDetection, setHazardAlerts, setNightDim, setStereo3D, setRecording, setHeadLock, setGlanceMode, setDepth / true | false
         - adjustHUDScale, adjustTextSize, adjustBrightness / up | down
         - moveHUD / up | down | left | right
         - cyclePreset / 1 | -1
-        - nextTheme, autoArrange, repeatGuidance, startHUD, stopHUD, syncNow, connectHeartRate / （値なし）
+        - nextTheme, autoArrange, repeatGuidance, startHUD, stopHUD, syncNow, connectHeartRate, recenterHead, measureDistance / （値なし）
         - status / time | date | battery | speed | eta | remainingDistance | weather | location | heading
         コマンドは最大\(maxCommands)個まで。安全のため、運転に関わる操作の依頼には応じないでください。
         """
@@ -114,6 +114,11 @@ public enum AICommandCodec {
         case "stopHUD": return .stopHUD
         case "syncNow": return .syncNow
         case "connectHeartRate": return .connectHeartRate
+        case "recenterHead": return .recenterHead
+        case "setHeadLock": return bool(v).map(AppCommand.setHeadLock)
+        case "setGlanceMode": return bool(v).map(AppCommand.setGlanceMode)
+        case "setDepth": return bool(v).map(AppCommand.setDepth)
+        case "measureDistance": return .measureDistance
         case "status": return StatusTopic(rawValue: v).map(AppCommand.status)
         default: return nil
         }
@@ -158,6 +163,22 @@ public enum DeepLink {
             return .open(.assistant)
         case "open":
             return AppScreen(rawValue: first).map(AppCommand.open)
+        case "depth":
+            if first == "on" || first.isEmpty { return .setDepth(true) }
+            if first == "off" { return .setDepth(false) }
+            if first == "measure" { return .measureDistance }
+            return nil
+        case "scan":
+            return .open(.scan3D)
+        case "head":
+            switch first {
+            case "recenter", "": return .recenterHead
+            case "lock": return .setHeadLock(true)
+            case "unlock": return .setHeadLock(false)
+            case "glance": return .setGlanceMode(true)
+            case "full": return .setGlanceMode(false)
+            default: return nil
+            }
         case "guidance":
             if first == "on" { return .setVoiceGuidance(true) }
             if first == "off" { return .setVoiceGuidance(false) }
@@ -188,6 +209,8 @@ public enum TemplateRenderer {
         ("{hr}", "心拍数"),
         ("{distance}", "移動距離"),
         ("{preset}", "プリセット名"),
+        ("{steps}", "今日の歩数"),
+        ("{yaw}", "頭の左右の向き"),
     ]
 
     /// 値のないトークンは "--" にする。テンプレートにない記号はそのまま。

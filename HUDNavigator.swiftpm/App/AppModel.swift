@@ -61,6 +61,8 @@ final class AppModel {
     var showsTestPattern = false
     /// AI からの提案（ホーム画面にボタン付きで表示）
     var suggestion: Suggestion?
+    /// 3D スキャン画面を表示中
+    var showsScan3D = false
     /// 最後に読み取った標識
     private(set) var lastSign: SignTextClassifier.SignReading?
 
@@ -84,6 +86,9 @@ final class AppModel {
     let deviceTest = DeviceTestModel()
     let heartRate = HeartRateService()
     let syncFolder = SyncFolderService()
+    let depth = DepthService()
+    let headTracking = HeadTrackingService()
+    let pedometer = PedometerService()
 
     @ObservationIgnored let store: JSONFileStore
     @ObservationIgnored private var demand: [WidgetRequirement: Int] = [:]
@@ -221,7 +226,11 @@ final class AppModel {
 
     /// HUD に実際に表示するパネル（移動中・高速移動時は情報を減らす）
     var effectivePanels: [HUDPanel] {
-        let panels = layout.visiblePanels
+        var panels = layout.visiblePanels
+        // 下を見たときだけ詳しく表示（ふだんは時計・次の曲がり角・通知だけ）
+        if settings.headTracking.glanceMode && headTracking.pose != nil && !headTracking.isGlancing {
+            panels = panels.filter { GlanceDetector.essentialWidgets.contains($0.widget) }
+        }
         if hudMinimizedForSpeed {
             return panels.filter { $0.widget == .clock || $0.widget == .notifications }
         }
@@ -249,6 +258,11 @@ final class AppModel {
             vision.configure(settings: settings.detection, inferenceFPS: powerProfile.inferenceFPS)
             refreshServices()
         }
+        if old.depth != settings.depth {
+            depth.attach(to: camera, settings: settings.depth, enabled: settings.depth.enabled)
+            refreshServices()
+        }
+        if old.headTracking != settings.headTracking { refreshServices() }
         if old.camera.zoom != settings.camera.zoom || old.camera.exposureBias != settings.camera.exposureBias {
             camera.applySettings()
         }
@@ -311,7 +325,8 @@ final class AppModel {
         let needsHeading = needs(.heading) || navigation.isGuiding
         if needsHeading { location.startHeading() } else { location.stopHeading() }
 
-        let needsMotion = needs(.motion) || (features.reduceWhileMoving && isHUDVisible)
+        let needsMotion = needs(.motion) || (features.reduceWhileMoving && isHUDVisible) || settings.depth.enabled
+            || (settings.headTracking.source == .device && headTrackingWanted)
         if needsMotion { motion.start(hz: powerProfile.motionHz) } else { motion.stop() }
 
         if needs(.weather), let c = location.lastSample?.coordinate {
@@ -321,12 +336,15 @@ final class AppModel {
         // 心拍計（設定で ON にして、心拍ウィジェットか設定画面が表示されているとき）
         if settings.bluetooth.heartRateEnabled && needs(.bluetooth) { heartRate.start() } else { heartRate.stop() }
 
-        // AirPods の頭の向き（HUD を空間に固定する設定のとき）
-        let wantsHead = settings.display.headLockWithAirPods && isHUDVisible
-        if wantsHead { motion.startHeadphoneTracking() } else { motion.stopHeadphoneTracking() }
+        // 頭の動き（AirPods・Bluetooth センサー・VITURE 本体・前面カメラ・端末）
+        headTracking.configure(settings: settings.headTracking, active: headTrackingWanted, motion: motion)
 
-        // 黒背景（グラスで透明）でも物体認識するときは、映像を出さずにカメラを動かす
-        let wantsHeadless = isHUDVisible && background != .camera && detectionActive && settings.detection.runsWithBlackBackground
+        // 歩数・気圧
+        if needs(.pedometer) { pedometer.start() } else { pedometer.stop() }
+
+        // 黒背景（グラスで透明）でも物体認識・距離推定するときは、映像を出さずにカメラを動かす
+        let wantsHeadless = isHUDVisible && background != .camera
+            && ((detectionActive && settings.detection.runsWithBlackBackground) || settings.depth.enabled)
         if wantsHeadless != headlessCameraHeld {
             headlessCameraHeld = wantsHeadless
             if wantsHeadless { camera.acquireHeadless() } else { camera.releaseHeadless() }

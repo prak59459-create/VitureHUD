@@ -37,6 +37,29 @@ extension AppModel {
         navigation.routeProvider = { [unowned self] origin, place, transport in
             try await self.findRoutes(from: origin, to: place, transport: transport)
         }
+        // 距離（LiDAR・2 つのカメラ・AI）
+        depth.geometry = { [unowned self] in (self.motion.cameraPitchDown, self.camera.verticalFieldOfView) }
+        depth.onObstacle = { [unowned self] o in self.postObstacle(o) }
+        depth.attach(to: camera, settings: settings.depth, enabled: settings.depth.enabled)
+        // 頭の動き
+        if settings.display.headLockWithAirPods && settings.headTracking.source == .off {
+            // 旧設定（AirPods で空間固定）を引き継ぐ
+            settings.headTracking.source = .airPods
+            settings.headTracking.headLock = true
+            settings.display.headLockWithAirPods = false
+        }
+        headTracking.onGesture = { [unowned self] g in self.handleHeadGesture(g) }
+        headTracking.isBackCameraBusy = { [unowned self] in self.camera.isInUse }
+        headTracking.ble.remembered = { [unowned self] in
+            self.settings.headTracking.rememberedSensorID.flatMap(UUID.init(uuidString:))
+        }
+        headTracking.ble.onConnected = { [unowned self] id, name in
+            if self.settings.headTracking.rememberedSensorID != id.uuidString {
+                self.settings.headTracking.rememberedSensorID = id.uuidString
+                self.settings.headTracking.rememberedSensorName = name
+            }
+            self.showToast("動きセンサー「\(name)」に接続しました")
+        }
         featureTimer = Timer.scheduledTimer(withTimeInterval: 10, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.featureTimerFired() }
         }
@@ -58,6 +81,66 @@ extension AppModel {
             lastMovingAt = nil
         }
         if featureTick % 6 == 0 { runAdvisor(now: now) }
+    }
+
+    // MARK: - 頭の動き
+
+    /// 頭の向きを取るか（表示中で、空間固定・ジェスチャー・チラ見のどれかを使う、または画面・ウィジェットで見ている）
+    var headTrackingWanted: Bool {
+        let h = settings.headTracking
+        guard h.source != .off else { return false }
+        return needs(.headTracking) || (isHUDVisible && (h.headLock || h.gesturesEnabled || h.glanceMode))
+    }
+
+    func handleHeadGesture(_ g: HeadGesture) {
+        let action = settings.headTracking.action(for: g)
+        guard action != .none else { return }
+        deviceTest.record("頭のジェスチャー: \(g.displayName) → \(action.displayName)")
+        showToast("\(g.displayName)：\(action.displayName)")
+        switch action {
+        case .none: break
+        case .acceptSuggestion:
+            if suggestion != nil { acceptSuggestion() }
+        case .dismissAlerts: alerts.dismissAll()
+        case .repeatGuidance: Task { await perform(.repeatGuidance) }
+        case .nextPreset: cyclePreset(1)
+        case .previousPreset: cyclePreset(-1)
+        case .toggleBackground: background = background.toggled
+        case .recenter: headTracking.recenter()
+        case .startVoice: if !speechInput.isListening { speechInput.toggle() }
+        }
+    }
+
+    // MARK: - 距離・障害物
+
+    func postObstacle(_ o: Obstacle) {
+        let distance = HUDFormat.distance(o.distance)
+        alerts.post(HUDAlert(
+            category: .hazard,
+            title: "\(o.direction) \(distance)に物があります",
+            message: "距離は目安です（\(depth.sourceLabel)）",
+            priority: o.level == .high ? .critical : .important,
+            duration: 2.5,
+            dedupeKey: "obstacle-\(o.direction)",
+            spokenText: "\(o.direction)、\(HUDFormat.spokenDistance(o.distance))"
+        ))
+    }
+
+    func measureDistanceOutcome() -> CommandOutcome {
+        guard settings.depth.enabled else {
+            settings.depth.enabled = true
+            return CommandOutcome(message: "距離の推定を始めました。数秒後にもう一度聞いてください。")
+        }
+        if let d = depth.centerDistance {
+            return CommandOutcome(message: "正面まで約\(HUDFormat.spokenDistance(d))です（\(depth.sourceLabel)）。")
+        }
+        if depth.grid != nil && !(depth.grid?.isMetric ?? false) {
+            return CommandOutcome(message: "距離をメートルに直せません。端末を少し下に向けて、地面が映るようにしてください。")
+        }
+        if !camera.isRunning {
+            return CommandOutcome(message: "カメラが動いていません。HUD を表示するか、ビジョン画面を開いてください。")
+        }
+        return CommandOutcome(message: "まだ測れていません。少し待ってからもう一度聞いてください。")
     }
 
     // MARK: - 提案（プロアクティブ）
@@ -194,6 +277,8 @@ extension AppModel {
             if let p = w.precipitationProbability { v["rain"] = "\(Int(p))%" }
         }
         if let bpm = heartRate.bpm, heartRate.isFresh { v["hr"] = String(bpm) }
+        if let steps = pedometer.stepsToday { v["steps"] = String(steps) }
+        if let p = headTracking.pose { v["yaw"] = String(format: "%+.0f°", p.yaw) }
         return v
     }
 

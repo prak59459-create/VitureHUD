@@ -60,6 +60,11 @@ final class AlertCenter {
 
     func clearHistory() { history.removeAll() }
 
+    /// 表示中の通知をすべて消す（頭を横に振ったときなど）
+    func dismissAll() {
+        active.removeAll()
+    }
+
     private func flash(_ level: HazardLevel) {
         hazardFlash = level
         Task { [weak self] in

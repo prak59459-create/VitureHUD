@@ -28,6 +28,10 @@ struct RootView: View {
             HUDFullScreenView()
                 .environment(model)
         }
+        .fullScreenCover(isPresented: $model.showsScan3D) {
+            SpatialScanScreen()
+                .environment(model)
+        }
         .fullScreenCover(isPresented: $model.showsTestPattern) {
             VisibilityTestScreen()
                 .environment(model)

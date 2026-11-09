@@ -28,6 +28,7 @@ struct VisionScreen: View {
                         }
                     }
                     VisionStatsCard()
+                    DepthSettingsCard()
                     VisionDiagnosticsCard()
                     Card(title: "物体認識", systemImage: "viewfinder") {
                         Toggle("物体認識を使う", isOn: Binding(

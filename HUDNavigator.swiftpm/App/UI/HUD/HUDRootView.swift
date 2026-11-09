@@ -66,6 +66,7 @@ struct HUDRootView: View {
         let canvas = model.layout.canvas
         let content = CGSize(width: size.width * canvas.scale, height: size.height * canvas.scale)
         let head = headLockOffset(size: size)
+        let headRoll = headLockRoll
         let origin = CGPoint(
             x: (size.width - content.width) / 2 + canvas.offsetX * size.width + head.width + parallax,
             y: (size.height - content.height) / 2 + canvas.offsetY * size.height + head.height
@@ -89,10 +90,16 @@ struct HUDRootView: View {
                     DetectionOverlay()
                         .frame(width: size.width, height: size.height)
                 }
+                if model.settings.depth.enabled && surface != .thumbnail && !surface.isEditable && model.depth.isFresh {
+                    DepthOverlay()
+                        .frame(width: size.width, height: size.height)
+                        .allowsHitTesting(false)
+                }
             }
 
             HUDPanelsLayer(surface: surface, canvasSize: content)
                 .frame(width: content.width, height: content.height)
+                .rotationEffect(.degrees(headRoll))
                 .offset(x: origin.x, y: origin.y)
                 .opacity(brightness)
 
@@ -122,14 +129,19 @@ struct HUDRootView: View {
         .frame(width: size.width, height: size.height)
     }
 
-    /// AirPods の頭の向きで HUD を逆向きにずらす（頭を動かしても HUD が空間に留まって見える）
+    /// 頭の向きで HUD を逆向きにずらす（頭を動かしても HUD が空間に留まって見える）
     private func headLockOffset(size: CGSize) -> CGSize {
-        let d = model.settings.display
-        guard d.headLockWithAirPods, !surface.isEditable, surface != .thumbnail, let o = model.motion.headOffset else { return .zero }
-        let perDegree = d.headLockStrength * size.height / 1080
-        let x = (o.yaw * perDegree).clamped(to: -Double(size.width) * 0.6...Double(size.width) * 0.6)
-        let y = (o.pitch * perDegree).clamped(to: -Double(size.height) * 0.6...Double(size.height) * 0.6)
-        return CGSize(width: x, height: y)
+        let h = model.settings.headTracking
+        guard h.headLock, !surface.isEditable, surface != .thumbnail, let pose = model.headTracking.pose else { return .zero }
+        let o = HeadLock.offset(for: pose, pixelsPerDegree: h.strength * size.height / 1080, width: size.width, height: size.height)
+        return CGSize(width: o.x, height: o.y)
+    }
+
+    /// 頭を傾けたとき HUD を逆に回す（水平を保つ）
+    private var headLockRoll: Double {
+        let h = model.settings.headTracking
+        guard h.headLock, h.compensatesRoll, !surface.isEditable, surface != .thumbnail, let pose = model.headTracking.pose else { return 0 }
+        return -pose.roll
     }
 }
 
@@ -315,7 +327,9 @@ struct DetectionOverlay: View {
     private func label(for d: Detection, settings: DetectionSettings) -> String {
         var text = ObjectLabels.displayName(label: d.label, raw: d.rawLabel)
         if settings.showsConfidence { text += " \(Int(d.confidence * 100))%" }
-        if settings.showsDistanceEstimate, let distance = d.approximateDistance(verticalFieldOfViewDegrees: model.camera.verticalFieldOfView) {
+        if model.settings.depth.enabled && model.settings.depth.showsObjectDistance, let measured = model.depth.distance(for: d.box) {
+            text += " \(String(format: "%.1f", measured))m"
+        } else if settings.showsDistanceEstimate, let distance = d.approximateDistance(verticalFieldOfViewDegrees: model.camera.verticalFieldOfView) {
             text += " 約\(Int(distance.rounded()))m(目安)"
         }
         return text
@@ -412,8 +426,11 @@ struct SystemIndicatorLayer: View {
                 if model.powerProfile.quality != .normal {
                     indicator("省電力：\(model.powerProfile.quality.displayName)", systemImage: "leaf", color: .green)
                 }
-                if model.settings.display.headLockWithAirPods && model.motion.headOffset != nil {
-                    indicator("空間固定（AirPods）", systemImage: "airpodspro", color: .cyan)
+                if model.settings.headTracking.headLock && model.headTracking.pose != nil {
+                    indicator("空間固定（\(model.settings.headTracking.source.displayName)）", systemImage: "move.3d", color: .cyan)
+                }
+                if model.settings.depth.enabled && model.depth.isFresh {
+                    indicator("距離：\(model.depth.sourceLabel)", systemImage: "ruler", color: .mint)
                 }
             }
             if model.settings.showsMetricsOverlay {
@@ -470,5 +487,85 @@ struct ServiceDemandModifier: ViewModifier {
 extension View {
     func serviceDemand(_ requirements: Set<WidgetRequirement>) -> some View {
         modifier(ServiceDemandModifier(requirements: requirements))
+    }
+}
+
+// MARK: - 距離の表示
+
+/// 距離の格子（数字・色）・中央の照準・近い物の警告。カメラ映像の位置に合わせて描く（黒背景ではおおよそ）
+struct DepthOverlay: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        GeometryReader { geo in
+            let size = geo.size
+            let aspect = max(0.1, model.camera.imageAspect)
+            let viewAspect = size.width / max(1, size.height)
+            let displayW = viewAspect > aspect ? size.width : size.height * aspect
+            let displayH = viewAspect > aspect ? size.width / aspect : size.height
+            let ox = (size.width - displayW) / 2
+            let oy = (size.height - displayH) / 2
+            let s = model.settings.depth
+            let theme = model.activeTheme
+            let fontSize = max(11, size.height * 0.02)
+            ZStack(alignment: .topLeading) {
+                if let grid = model.depth.grid {
+                    // 粗い格子（4 列 × 5 行）で数字を出す
+                    let cols = 4, rows = 5
+                    if s.showsHeatmap && grid.isMetric {
+                        ForEach(0..<(grid.columns * grid.rows), id: \.self) { i in
+                            let c = i % grid.columns, r = i / grid.columns
+                            if let v = grid.value(column: c, row: r) {
+                                Rectangle()
+                                    .fill(Self.color(for: Double(v)).opacity(0.28))
+                                    .frame(width: displayW / CGFloat(grid.columns), height: displayH / CGFloat(grid.rows))
+                                    .position(x: ox + (CGFloat(c) + 0.5) * displayW / CGFloat(grid.columns), y: oy + (CGFloat(r) + 0.5) * displayH / CGFloat(grid.rows))
+                            }
+                        }
+                    }
+                    if s.showsGrid {
+                        ForEach(0..<(cols * rows), id: \.self) { i in
+                            let c = i % cols, r = i / cols
+                            let rect = NormalizedRect(x: Double(c) / Double(cols), y: Double(r) / Double(rows), width: 1 / Double(cols), height: 1 / Double(rows))
+                            if let v = grid.median(in: rect) {
+                                Text(grid.isMetric ? String(format: "%.1f", v) : (v > 0.66 ? "近" : v > 0.33 ? "中" : "遠"))
+                                    .font(.system(size: fontSize, weight: .semibold, design: .rounded).monospacedDigit())
+                                    .foregroundStyle(grid.isMetric ? Self.color(for: Double(v)) : Color(theme.style.secondaryTextColor))
+                                    .position(x: ox + (CGFloat(c) + 0.5) * displayW / CGFloat(cols), y: oy + (CGFloat(r) + 0.5) * displayH / CGFloat(rows))
+                            }
+                        }
+                    }
+                }
+                if s.showsReticle {
+                    let center = CGPoint(x: size.width / 2, y: size.height / 2)
+                    Circle()
+                        .stroke(Color(theme.style.accentColor), lineWidth: 2)
+                        .frame(width: fontSize * 1.6, height: fontSize * 1.6)
+                        .position(center)
+                    Text(model.depth.centerDistance.map { String(format: "%.2f m", $0) } ?? "--")
+                        .font(.system(size: fontSize * 1.2, weight: .bold, design: .rounded).monospacedDigit())
+                        .foregroundStyle(Color(theme.style.accentColor))
+                        .padding(.horizontal, 6)
+                        .background(Color.black.opacity(0.45), in: Capsule())
+                        .position(x: center.x, y: center.y + fontSize * 1.8)
+                }
+                if let o = model.depth.obstacle {
+                    let color = o.level >= .high ? Color(theme.dangerColor) : Color(theme.warningColor)
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(color, lineWidth: 4)
+                        .frame(width: displayW * 0.18, height: displayH * 0.18)
+                        .position(x: ox + o.x * displayW, y: size.height * 0.5)
+                }
+            }
+        }
+    }
+
+    /// 近い＝赤、2m＝黄、5m 以上＝緑
+    static func color(for meters: Double) -> Color {
+        if meters < 1 { return .red }
+        if meters < 2 { return .orange }
+        if meters < 3.5 { return .yellow }
+        if meters < 6 { return .green }
+        return .cyan
     }
 }

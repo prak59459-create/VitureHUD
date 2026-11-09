@@ -3,11 +3,18 @@ import AVFoundation
 import Observation
 
 /// AVCaptureSession を専用キューで動かす部分（MainActor から切り離す）。
-final class CameraPipeline: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, @unchecked Sendable {
+final class CameraPipeline: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, AVCaptureDepthDataOutputDelegate, @unchecked Sendable {
     let session = AVCaptureSession()
     private let sessionQueue = DispatchQueue(label: "hudnavigator.camera.session")
     private let videoQueue = DispatchQueue(label: "hudnavigator.camera.video", qos: .userInitiated)
     private let output = AVCaptureVideoDataOutput()
+    private let depthOutput = AVCaptureDepthDataOutput()
+    private let depthQueue = DispatchQueue(label: "hudnavigator.camera.depth", qos: .utility)
+    private var _depthHandler: (@Sendable ([Float], Int, Int) -> Void)?
+    private var lastDepthDelivery = Date.distantPast
+    /// 深さの地図の回転（接続で回転できない場合に読み取り時に回す）
+    private var depthRotation = 0
+    private var depthSensor: DepthSourceKind?
     private var device: AVCaptureDevice?
     private var configured = false
     private var rotationCoordinator: AVCaptureDevice.RotationCoordinator?
@@ -25,6 +32,22 @@ final class CameraPipeline: NSObject, AVCaptureVideoDataOutputSampleBufferDelega
         lock.lock(); _frameHandlers[key] = handler; lock.unlock()
     }
 
+    /// 深さ（m）の受け取り先：値の配列・幅・高さ
+    func setDepthHandler(_ handler: (@Sendable ([Float], Int, Int) -> Void)?) {
+        lock.lock(); _depthHandler = handler; lock.unlock()
+    }
+
+    /// 深さを測れるカメラ（LiDAR・2 つのカメラ）
+    static func depthDevice(for kind: DepthSourceKind?) -> AVCaptureDevice? {
+        switch kind {
+        case .lidar?: return AVCaptureDevice.default(.builtInLiDARDepthCamera, for: .video, position: .back)
+        case .dualCamera?:
+            return AVCaptureDevice.default(.builtInDualWideCamera, for: .video, position: .back)
+                ?? AVCaptureDevice.default(.builtInDualCamera, for: .video, position: .back)
+        default: return nil
+        }
+    }
+
     /// これまでに届いたフレーム数（診断用）
     var frameCount: Int {
         lock.lock(); defer { lock.unlock() }; return _frameCount
@@ -37,16 +60,21 @@ final class CameraPipeline: NSObject, AVCaptureVideoDataOutputSampleBufferDelega
 
     private var usingExternal = false
 
-    func configure(prefersUltraWide: Bool, useExternal: Bool = false, maxHeight: Int, fps: Int) {
+    func configure(prefersUltraWide: Bool, useExternal: Bool = false, maxHeight: Int, fps: Int, depthSensor wantedDepth: DepthSourceKind? = nil) {
         sessionQueue.async { [self] in
             session.beginConfiguration()
             let external = useExternal ? Self.externalCameras.first : nil
+            let depthCamera = external == nil ? Self.depthDevice(for: wantedDepth) : nil
             let preset: AVCaptureSession.Preset = maxHeight >= 1080 ? .hd1920x1080 : .hd1280x720
-            session.sessionPreset = session.canSetSessionPreset(preset) ? preset : .high
-            if !configured || (device?.deviceType == .builtInUltraWideCamera) != prefersUltraWide || (external != nil) != usingExternal {
+            if depthCamera == nil {
+                session.sessionPreset = session.canSetSessionPreset(preset) ? preset : .high
+            }
+            let depthChanged = (depthCamera != nil) != (depthSensor != nil) || (depthCamera != nil && depthSensor != wantedDepth)
+            if !configured || depthChanged || (depthCamera == nil && (device?.deviceType == .builtInUltraWideCamera) != prefersUltraWide) || (external != nil) != usingExternal {
                 for input in session.inputs { session.removeInput(input) }
                 let preferred: AVCaptureDevice.DeviceType = prefersUltraWide ? .builtInUltraWideCamera : .builtInWideAngleCamera
                 let camera = external
+                    ?? depthCamera
                     ?? AVCaptureDevice.default(preferred, for: .video, position: .back)
                     ?? AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back)
                 usingExternal = external != nil
@@ -66,9 +94,52 @@ final class CameraPipeline: NSObject, AVCaptureVideoDataOutputSampleBufferDelega
                 configured = true
                 setupRotation(camera)
             }
+            configureDepth(camera: depthCamera, kind: wantedDepth, maxHeight: maxHeight)
             setFrameRate(fps)
             session.commitConfiguration()
             publishFormat()
+        }
+    }
+
+    /// LiDAR・2 つのカメラの深さを出す設定（sessionQueue で呼ぶ）
+    private func configureDepth(camera: AVCaptureDevice?, kind: DepthSourceKind?, maxHeight: Int) {
+        guard let camera, camera === device else {
+            if session.outputs.contains(depthOutput) { session.removeOutput(depthOutput) }
+            depthSensor = nil
+            return
+        }
+        session.sessionPreset = .inputPriority
+        func dims(_ f: AVCaptureDevice.Format) -> CMVideoDimensions { CMVideoFormatDescriptionGetDimensions(f.formatDescription) }
+        let candidates = camera.formats.filter {
+            !$0.supportedDepthDataFormats.isEmpty
+                && CMFormatDescriptionGetMediaSubType($0.formatDescription) == kCVPixelFormatType_420YpCbCr8BiPlanarFullRange
+        }
+        let fitting = candidates.filter { Int(dims($0).height) <= maxHeight }
+        if let format = (fitting.isEmpty ? candidates : fitting).max(by: { dims($0).width < dims($1).width }) {
+            let depthFormats = format.supportedDepthDataFormats.filter {
+                let t = CMFormatDescriptionGetMediaSubType($0.formatDescription)
+                return t == kCVPixelFormatType_DepthFloat16 || t == kCVPixelFormatType_DepthFloat32
+            }
+            do {
+                try camera.lockForConfiguration()
+                camera.activeFormat = format
+                if let d = depthFormats.max(by: { dims($0).width < dims($1).width }) { camera.activeDepthDataFormat = d }
+                camera.unlockForConfiguration()
+            } catch {}
+        }
+        if !session.outputs.contains(depthOutput), session.canAddOutput(depthOutput) {
+            session.addOutput(depthOutput)
+            depthOutput.isFilteringEnabled = true
+            depthOutput.alwaysDiscardsLateDepthData = true
+            depthOutput.setDelegate(self, callbackQueue: depthQueue)
+        }
+        depthSensor = kind
+        let angle = output.connection(with: .video)?.videoRotationAngle ?? 90
+        if let c = depthOutput.connection(with: .depthData), c.isVideoRotationAngleSupported(angle) {
+            c.videoRotationAngle = angle
+            depthRotation = 0
+        } else {
+            depthRotation = Int(angle.rounded())
         }
     }
 
@@ -158,6 +229,21 @@ final class CameraPipeline: NSObject, AVCaptureVideoDataOutputSampleBufferDelega
         }
     }
 
+    /// 深さの地図が届いた（10 回/秒まで）
+    func depthDataOutput(_ output: AVCaptureDepthDataOutput, didOutput depthData: AVDepthData, timestamp: CMTime, connection: AVCaptureConnection) {
+        let now = Date()
+        lock.lock()
+        let handler = _depthHandler
+        let ready = now.timeIntervalSince(lastDepthDelivery) >= 0.1
+        if ready { lastDepthDelivery = now }
+        let rotation = depthRotation
+        lock.unlock()
+        guard let handler, ready else { return }
+        let converted = depthData.depthDataType == kCVPixelFormatType_DepthFloat32 ? depthData : depthData.converting(toDepthDataType: kCVPixelFormatType_DepthFloat32)
+        guard let values = DepthBufferReader.sample(converted.depthDataMap, outW: 48, outH: 64, rotation: rotation) else { return }
+        handler(values, 48, 64)
+    }
+
     func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
         lock.lock()
         _frameCount += 1
@@ -190,6 +276,24 @@ final class CameraController {
     /// 映像を表示せずにカメラを動かす依頼の数（黒背景での物体認識・距離推定）
     private(set) var headlessCount = 0
     @ObservationIgnored private var wantsRunning = false
+    /// 3D スキャン（ARKit）がカメラを使っている間は止める
+    @ObservationIgnored private var suspendedForAR = false
+
+    func setSuspendedForAR(_ suspended: Bool) {
+        guard suspended != suspendedForAR else { return }
+        suspendedForAR = suspended
+        wantsRunning = false
+        if suspended { pipeline.stop() }
+        updateActiveSurface()
+    }
+    /// 深さを測るカメラ（nil は通常のカメラ）
+    @ObservationIgnored private var depthSensor: DepthSourceKind?
+
+    func setDepthSensor(_ kind: DepthSourceKind?) {
+        guard kind != depthSensor else { return }
+        depthSensor = kind
+        if wantsRunning { configureAndStart() }
+    }
     @ObservationIgnored private var profile = (fps: 30, maxHeight: 1080)
     @ObservationIgnored var settingsProvider: (() -> CameraSettings)?
 
@@ -259,7 +363,7 @@ final class CameraController {
     private func updateActiveSurface() {
         let next = surfaces.keys.filter { $0 != .thumbnail }.max { $0.cameraPriority < $1.cameraPriority }
         if next != activeSurface { activeSurface = next }
-        let want = next != nil || headlessCount > 0
+        let want = !suspendedForAR && (next != nil || headlessCount > 0)
         guard want != wantsRunning else { return }
         wantsRunning = want
         if want {
@@ -286,7 +390,7 @@ final class CameraController {
     private func configureAndStart() {
         let s = settingsProvider?() ?? CameraSettings()
         lastError = nil
-        pipeline.configure(prefersUltraWide: s.prefersUltraWide, useExternal: s.useExternalCamera, maxHeight: profile.maxHeight, fps: profile.fps)
+        pipeline.configure(prefersUltraWide: s.prefersUltraWide, useExternal: s.useExternalCamera, maxHeight: profile.maxHeight, fps: profile.fps, depthSensor: depthSensor)
         pipeline.start()
         pipeline.setZoom(s.zoom)
         pipeline.setExposureBias(s.exposureBias)

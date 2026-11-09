@@ -36,6 +36,9 @@ struct WidgetContentView: View {
         case .horizon: HorizonWidget(ctx: ctx)
         case .hourlyForecast: HourlyForecastWidget(ctx: ctx)
         case .nearbyPlaces: NearbyPlacesWidget(ctx: ctx)
+        case .steps: StepsWidget(ctx: ctx)
+        case .headPose: HeadPoseWidget(ctx: ctx)
+        case .distance: DistanceWidget(ctx: ctx)
         }
     }
 }
@@ -688,5 +691,78 @@ struct NearbyPlacesWidget: View {
     private func currentDistance(_ p: PlaceResult) -> Double? {
         if let here = model.location.lastSample?.coordinate { return Geo.distance(here, p.coordinate) }
         return p.distance
+    }
+}
+
+/// 歩数・気圧
+struct StepsWidget: View {
+    @Environment(AppModel.self) private var model
+    let ctx: WidgetContext
+    var body: some View {
+        let p = model.pedometer
+        var caption: [String] = []
+        if let c = p.cadence, c > 0 { caption.append("\(Int((c * 60).rounded()))歩/分") }
+        if let f = p.floorsUp, f > 0 { caption.append("\(f)階") }
+        if let pr = p.pressure { caption.append(String(format: "%.0fhPa", pr)) }
+        return MetricView(
+            ctx: ctx,
+            icon: ctx.config.compact ? nil : "shoeprints.fill",
+            value: p.stepsToday.map { "\($0)" } ?? "--",
+            unit: "歩",
+            caption: caption.isEmpty ? (p.status.isEmpty ? "今日の歩数" : p.status) : caption.joined(separator: "・")
+        )
+    }
+}
+
+/// 頭の向き（ヘッドトラッキングの確認用）
+struct HeadPoseWidget: View {
+    @Environment(AppModel.self) private var model
+    let ctx: WidgetContext
+    var body: some View {
+        let pose = model.headTracking.pose
+        GeometryReader { geo in
+            let w = geo.size.width, h = geo.size.height
+            let r = min(w, h) * 0.38
+            ZStack {
+                Circle().stroke(ctx.secondary, lineWidth: 1.5).frame(width: r * 2, height: r * 2)
+                Path { p in
+                    p.move(to: CGPoint(x: w / 2 - r, y: h / 2)); p.addLine(to: CGPoint(x: w / 2 + r, y: h / 2))
+                    p.move(to: CGPoint(x: w / 2, y: h / 2 - r)); p.addLine(to: CGPoint(x: w / 2, y: h / 2 + r))
+                }
+                .stroke(ctx.secondary.opacity(0.5), lineWidth: 1)
+                if let pose {
+                    let x = (pose.yaw / 45).clamped(to: -1...1) * Double(r)
+                    let y = (-pose.pitch / 45).clamped(to: -1...1) * Double(r)
+                    Circle().fill(ctx.accent).frame(width: r * 0.3, height: r * 0.3)
+                        .position(x: w / 2 + x, y: h / 2 + y)
+                    Text(String(format: "%+.0f° %+.0f°", pose.yaw, pose.pitch))
+                        .font(ctx.typography.font(0.14, weight: .semibold).monospacedDigit())
+                        .foregroundStyle(ctx.text)
+                        .position(x: w / 2, y: h - ctx.typography.size(0.1))
+                } else {
+                    Text(model.settings.headTracking.source == .off ? "頭の動き：オフ" : "待機中")
+                        .font(ctx.typography.font(0.14, weight: .medium))
+                        .foregroundStyle(ctx.secondary)
+                }
+            }
+        }
+    }
+}
+
+/// 正面までの距離・近くの物
+struct DistanceWidget: View {
+    @Environment(AppModel.self) private var model
+    let ctx: WidgetContext
+    var body: some View {
+        let d = model.depth
+        if !model.settings.depth.enabled {
+            MetricView(ctx: ctx, icon: "ruler", value: "--", caption: "距離の推定はオフ")
+        } else if let o = d.obstacle {
+            MetricView(ctx: ctx, icon: "exclamationmark.triangle.fill", value: String(format: "%.1f", o.distance), unit: "m",
+                       caption: "\(o.direction)に物・\(d.sourceLabel)", valueColor: o.level >= .high ? ctx.danger : ctx.warning)
+        } else {
+            MetricView(ctx: ctx, icon: ctx.config.compact ? nil : "ruler", value: d.centerDistance.map { String(format: "%.1f", $0) } ?? "--", unit: "m",
+                       caption: d.isFresh ? "正面まで・\(d.sourceLabel)" : (d.status.isEmpty ? "測定待ち" : d.status))
+        }
     }
 }

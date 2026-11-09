@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import UniformTypeIdentifiers
 
 // MARK: - Google Maps
@@ -220,21 +221,13 @@ struct HUDAppearanceSection: View {
             Text("VITURE は 3D モードで 3840×1080（左右合計）の信号を受け取ります。端末がこの大きさで出力した場合は自動で左右に描き分け、1920×1080 のままの場合は「3D 表示」を ON にすると左右に半分ずつ描きます。")
         }
         Section {
-            Toggle("AirPods の頭の向きで HUD を空間に固定", isOn: $model.settings.display.headLockWithAirPods)
-            if d.headLockWithAirPods {
-                LabeledSlider(title: "固定の強さ（1度あたり）", value: $model.settings.display.headLockStrength, range: 5...80, format: { "\(Int($0)) px" })
-                Button("今の向きを正面にする") { model.motion.recenterHead() }
-                if let o = model.motion.headOffset {
-                    LabeledContent("正面からのずれ", value: String(format: "左右 %+.0f° / 上下 %+.0f°", o.yaw, o.pitch))
-                } else {
-                    Text(model.motion.isHeadphoneMotionAvailable ? "HUD の表示中に動きます。" : "対応する AirPods（Pro・第3世代以降・Max）を接続してください。")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
+            NavigationLink {
+                HeadTrackingSettingsView()
+            } label: {
+                LabeledContent("頭の動き（空間固定・ジェスチャー）", value: model.settings.headTracking.source.displayName)
             }
         } header: {
-            Text("空間固定（実験）")
-        } footer: {
-            Text("VITURE の頭部トラッキングは iOS アプリから読めないため、AirPods の動きセンサーで代用します。頭を右に向けると HUD が左に動き、空間に留まって見えます。")
+            Text("頭の動き")
         }
         Section {
             Toggle("グラスに表示中は端末の画面を暗くする", isOn: $model.settings.display.dimsDeviceScreen)
@@ -371,5 +364,205 @@ struct VisitsAndUsageSections: View {
         for p in usage.topPresets() { rows.append(Row(id: "プリセット：\(p.name)", value: HUDFormat.duration(p.seconds))) }
         for c in usage.topCommands() { rows.append(Row(id: c.name, value: "\(c.count)回")) }
         return rows
+    }
+}
+
+// MARK: - 頭の動き（ヘッドトラッキング）
+
+struct HeadTrackingSettingsView: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        @Bindable var model = model
+        let h = model.settings.headTracking
+        let ht = model.headTracking
+        Form {
+            Section {
+                Picker("頭の向きの取り方", selection: $model.settings.headTracking.source) {
+                    ForEach(HeadTrackingSource.allCases, id: \.self) { Text($0.displayName).tag($0) }
+                }
+                Text(h.source.detail).font(.caption).foregroundStyle(.secondary)
+                LabeledContent("状態", value: ht.status)
+                if let p = ht.pose {
+                    LabeledContent("正面からのずれ", value: String(format: "左右 %+.0f°・上下 %+.0f°・傾き %+.0f°", p.yaw, p.pitch, p.roll))
+                    LabeledContent("更新", value: String(format: "%.0f 回/秒", ht.sampleRate))
+                }
+                Button("今の向きを正面にする") { ht.recenter() }
+                    .disabled(h.source == .off)
+            } header: {
+                Text("センサー")
+            } footer: {
+                Text("VITURE 本体のセンサーは iOS から公式には読めないため、ほかの方法で頭の向きを取ります。")
+            }
+
+            if h.source == .bleSensor { BLEIMUSection() }
+            if h.source == .glassesUSB { GlassesUSBSection() }
+
+            Section {
+                Toggle("HUD を空間に固定", isOn: $model.settings.headTracking.headLock)
+                LabeledSlider(title: "固定の強さ（1度あたり）", value: $model.settings.headTracking.strength, range: 5...80, format: { "\(Int($0)) px" })
+                Toggle("傾けても HUD を水平に保つ", isOn: $model.settings.headTracking.compensatesRoll)
+                LabeledSlider(title: "なめらかさ", value: $model.settings.headTracking.smoothing, range: 0...0.9, format: { "\(Int($0 * 100))%" })
+            } header: {
+                Text("空間固定")
+            } footer: {
+                Text("頭を右に向けると HUD が左に動き、空間に留まって見えます。向きが逆なら下の「反転」を使ってください。")
+            }
+
+            Section {
+                Toggle("左右を反転", isOn: $model.settings.headTracking.invertYaw)
+                Toggle("上下を反転", isOn: $model.settings.headTracking.invertPitch)
+                Toggle("傾きを反転", isOn: $model.settings.headTracking.invertRoll)
+                Toggle("上下と傾きを入れ替える（センサーを横向きに付けた場合）", isOn: $model.settings.headTracking.swapPitchRoll)
+            } header: {
+                Text("向きの調整")
+            }
+
+            Section {
+                Toggle("頭のジェスチャーで操作", isOn: $model.settings.headTracking.gesturesEnabled)
+                Picker("うなずく", selection: $model.settings.headTracking.nodAction) { actions }
+                Picker("首を横に振る", selection: $model.settings.headTracking.shakeAction) { actions }
+                Picker("首を左にかしげる", selection: $model.settings.headTracking.tiltLeftAction) { actions }
+                Picker("首を右にかしげる", selection: $model.settings.headTracking.tiltRightAction) { actions }
+                if let g = ht.lastGesture, let at = ht.lastGestureAt {
+                    LabeledContent("最後のジェスチャー", value: "\(g.displayName)（\(HUDFormat.clock(at, seconds: true))）")
+                }
+            } header: {
+                Text("ジェスチャー")
+            } footer: {
+                Text("うなずき＝下→上にすばやく、首振り＝左右に 2 往復、かしげる＝傾けたまま 0.5 秒。")
+            }
+
+            Section {
+                Toggle("下を見たときだけ詳しく表示", isOn: $model.settings.headTracking.glanceMode)
+                LabeledSlider(title: "下を向いたとみなす角度", value: $model.settings.headTracking.glanceAngle, range: 5...40, format: { "\(Int($0))°" })
+                if h.glanceMode {
+                    LabeledContent("今", value: ht.isGlancing ? "下を見ている（詳しく表示）" : "前を見ている（時計・曲がり角・通知だけ）")
+                }
+            } header: {
+                Text("チラ見モード")
+            }
+        }
+        .navigationTitle("頭の動き")
+        .serviceDemand([.headTracking])
+    }
+
+    @ViewBuilder private var actions: some View {
+        ForEach(HeadGestureAction.allCases, id: \.self) { Text($0.displayName).tag($0) }
+    }
+}
+
+/// Bluetooth の動きセンサーの接続
+struct BLEIMUSection: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        let ble = model.headTracking.ble
+        Section {
+            LabeledContent("状態", value: ble.state)
+            if let name = ble.connectedName {
+                LabeledContent("接続中", value: "\(name)\(ble.kind.map { "（\($0)）" } ?? "")")
+                if ble.kind == "WitMotion" {
+                    HStack {
+                        Button("20Hz") { ble.setWitMotionRate(20) }
+                        Button("50Hz") { ble.setWitMotionRate(50) }
+                        Button("100Hz") { ble.setWitMotionRate(100) }
+                    }
+                    .buttonStyle(.bordered)
+                }
+                if let a = ble.lastAcceleration {
+                    LabeledContent("加速度", value: String(format: "%.2f / %.2f / %.2f G", a.x, a.y, a.z))
+                }
+            }
+            Button("センサーを探す") { ble.scan() }
+            ForEach(ble.found) { d in
+                Button {
+                    ble.connect(d.id)
+                } label: {
+                    HStack {
+                        Text(d.name)
+                        Spacer()
+                        Text("\(d.rssi) dBm").font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+            }
+            if let name = model.settings.headTracking.rememberedSensorName {
+                LabeledContent("記憶しているセンサー", value: name)
+                Button("記憶を消す", role: .destructive) {
+                    model.settings.headTracking.rememberedSensorID = nil
+                    model.settings.headTracking.rememberedSensorName = nil
+                }
+            }
+        } header: {
+            Text("Bluetooth の動きセンサー")
+        } footer: {
+            Text("WitMotion の Bluetooth 5.0 センサー（WT901BLECL など・数千円）を VITURE のつるにテープで付けると、グラスそのものの向き・加速度が取れます。ESP32 などで自作する場合は、リポジトリの Extensions/Hardware のスケッチを使ってください。")
+        }
+    }
+}
+
+/// VITURE 本体（USB）の診断
+struct GlassesUSBSection: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        let ht = model.headTracking
+        Section {
+            LabeledContent("受信したデータ", value: "\(ht.usbPackets) 件")
+            ForEach(Array(ht.usbLog.enumerated()), id: \.offset) { _, line in
+                Text(line).font(.caption2.monospaced())
+            }
+            Button("結果をコピー（報告用）") {
+                UIPasteboard.general.string = ht.usbLog.joined(separator: "\n")
+                model.showToast("コピーしました")
+            }
+        } header: {
+            Text("VITURE 本体（USB・実験）の記録")
+        } footer: {
+            Text("公開されている解析結果（オープンソース）を元に、USB の HID 経由でセンサーの送信を始める命令を送ります。iOS が一般のアプリに USB 機器を開かせない場合は「許可されていません」と表示されます。")
+        }
+    }
+}
+
+// MARK: - 距離・3D（ビジョン画面）
+
+struct DepthSettingsCard: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        @Bindable var model = model
+        let s = model.settings.depth
+        let d = model.depth
+        Card(title: "距離・3D", systemImage: "ruler") {
+            Toggle("距離を推定する", isOn: $model.settings.depth.enabled)
+            Picker("方法", selection: $model.settings.depth.source) {
+                ForEach(DepthSourceKind.allCases, id: \.self) { Text($0.displayName).tag($0) }
+            }
+            Text("この端末：LiDAR \(DepthService.hasLiDAR ? "あり" : "なし")・2 つのカメラ \(DepthService.hasDualCamera ? "あり" : "なし")・AI 推定 あり → 使う方法：\(DepthService.resolve(s.source).displayName)")
+                .font(.caption).foregroundStyle(.secondary)
+            if s.enabled {
+                LabeledContent("状態", value: d.status)
+                if !d.aiStatus.isEmpty { Text(d.aiStatus).font(.caption) }
+                LabeledContent("正面まで", value: d.centerDistance.map { String(format: "%.2f m", $0) } ?? "--")
+                if let o = d.obstacle { LabeledContent("近くの物", value: "\(o.direction) \(String(format: "%.1f", o.distance)) m") }
+                if d.activeSource == .aiMonocular { LabeledContent("AI の処理時間", value: "\(Int(d.inferenceMs)) ms") }
+            }
+            LabeledSlider(title: "端末を持つ高さ（AI の換算用）", value: $model.settings.depth.cameraHeight, range: 0.5...2.0, format: { String(format: "%.2f m", $0) })
+            LabeledSlider(title: "AI 推定の回数", value: $model.settings.depth.aiFPS, range: 1...10, format: { String(format: "%.0f 回/秒", $0) })
+            Toggle("距離の数字を表示", isOn: $model.settings.depth.showsGrid)
+            Toggle("距離を色で表示", isOn: $model.settings.depth.showsHeatmap)
+            Toggle("中央の照準と距離", isOn: $model.settings.depth.showsReticle)
+            Toggle("検出した物に距離を付ける", isOn: $model.settings.depth.showsObjectDistance)
+            Toggle("近くの物を知らせる", isOn: $model.settings.depth.obstacleAlerts)
+            LabeledSlider(title: "知らせる距離", value: $model.settings.depth.obstacleDistance, range: 0.5...4, format: { String(format: "%.1f m", $0) })
+            Text("AI 推定は「地面がどう見えるか」から m に直すので、端末を少し下に向けて地面が映るようにすると正確になります。何の物か分からなくても、近い物はすべて知らせます。距離は目安です。")
+                .font(.caption).foregroundStyle(.secondary)
+            Button {
+                model.showsScan3D = true
+            } label: {
+                Label("3D スキャン（周りを立体的に記録・測定）", systemImage: "cube.transparent")
+            }
+            .buttonStyle(.borderedProminent)
+        }
     }
 }

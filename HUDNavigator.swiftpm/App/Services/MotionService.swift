@@ -40,6 +40,19 @@ final class MotionService {
         headReference = headphoneAttitude
     }
     private(set) var isShakeDetected = false
+    /// 重力の向き（端末の座標・単位 G）。距離の推定でカメラの傾きを知るのに使う
+    @ObservationIgnored private(set) var gravity: (x: Double, y: Double, z: Double)?
+    /// 頭の向き（AirPods）・端末の向きが届いたとき（ヘッドトラッキング用）
+    @ObservationIgnored var onHeadphoneAttitude: ((Attitude) -> Void)?
+    @ObservationIgnored var onDeviceAttitude: ((Attitude) -> Void)?
+
+    /// 背面カメラが水平より何度下を向いているか（端末の向きに関係なく）
+    var cameraPitchDown: Double? {
+        guard let g = gravity else { return nil }
+        let n = (g.x * g.x + g.y * g.y + g.z * g.z).squareRoot()
+        guard n > 0.1 else { return nil }
+        return asin(max(-1, min(1, -g.z / n))) * 180 / .pi
+    }
 
     @ObservationIgnored private let manager = CMMotionManager()
     @ObservationIgnored private let activityManager = CMMotionActivityManager()
@@ -70,8 +83,11 @@ final class MotionService {
                 roll: motion.attitude.roll * 180 / .pi,
                 yaw: motion.attitude.yaw * 180 / .pi
             )
+            let g = motion.gravity
             MainActor.assumeIsolated {
+                self?.gravity = (g.x, g.y, g.z)
                 self?.handle(attitude: att, acceleration: magnitude, rotation: rotation)
+                self?.onDeviceAttitude?(att)
             }
         }
     }
@@ -119,6 +135,7 @@ final class MotionService {
             MainActor.assumeIsolated {
                 self?.headphoneAttitude = att
                 if self?.headReference == nil { self?.headReference = att }
+                self?.onHeadphoneAttitude?(att)
             }
         }
     }

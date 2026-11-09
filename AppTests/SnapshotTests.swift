@@ -116,6 +116,18 @@ final class SnapshotTests: XCTestCase {
         try render(HUDRootView(surface: .thumbnail), model: model, size: glasses, name: "widgets-new-text140")
     }
 
+    func testSensorWidgets() throws {
+        let model = makeModel(preset: "daily")
+        var l = model.layout
+        l.panels = [
+            HUDPanel(widget: .distance, frame: NormalizedRect(x: 0.03, y: 0.05, width: 0.2, height: 0.13), zIndex: 1),
+            HUDPanel(widget: .headPose, frame: NormalizedRect(x: 0.03, y: 0.22, width: 0.16, height: 0.2), zIndex: 2),
+            HUDPanel(widget: .steps, frame: NormalizedRect(x: 0.25, y: 0.05, width: 0.2, height: 0.13), zIndex: 3),
+        ]
+        model.layout = l
+        try render(HUDRootView(surface: .thumbnail), model: model, size: glasses, name: "widgets-sensors")
+    }
+
     func testStereoSideBySide() throws {
         let model = makeModel(preset: "minimal")
         model.settings.display.stereo3D = true

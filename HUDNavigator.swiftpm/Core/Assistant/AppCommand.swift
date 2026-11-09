@@ -34,7 +34,7 @@ public enum StatusTopic: String, Codable, CaseIterable, Sendable {
 }
 
 public enum AppScreen: String, Codable, CaseIterable, Sendable {
-    case home, hud, hudEditor, navigation, vision, assistant, settings, history, weather
+    case home, hud, hudEditor, navigation, vision, assistant, settings, history, weather, scan3D
 
     public var displayName: String {
         switch self {
@@ -47,6 +47,7 @@ public enum AppScreen: String, Codable, CaseIterable, Sendable {
         case .settings: return "設定"
         case .history: return "履歴"
         case .weather: return "天気"
+        case .scan3D: return "3Dスキャン"
         }
     }
 }
@@ -166,6 +167,16 @@ public enum AppCommand: Hashable, Sendable {
     case connectHeartRate
     case syncNow
     case setRecording(Bool)
+    /// 今の頭の向きを正面にする
+    case recenterHead
+    /// HUD を空間に固定する（頭の動き）
+    case setHeadLock(Bool)
+    /// 下を見たときだけ詳しく表示する
+    case setGlanceMode(Bool)
+    /// 距離の推定（LiDAR・2 つのカメラ・AI）
+    case setDepth(Bool)
+    /// 正面の物までの距離を読み上げる
+    case measureDistance
     case cancel
     /// 定型コマンドに当てはまらない質問（AIアシスタントへ）
     case ask(String)
@@ -207,6 +218,11 @@ public enum AppCommand: Hashable, Sendable {
         case .connectHeartRate: return "心拍計に接続"
         case .syncNow: return "今すぐ同期"
         case .setRecording(let on): return on ? "移動の記録を開始" : "移動の記録を終了"
+        case .recenterHead: return "正面を合わせる"
+        case .setHeadLock(let on): return on ? "HUDを空間に固定" : "HUDの固定を解除"
+        case .setGlanceMode(let on): return on ? "下を見たときだけ詳しく表示" : "常に詳しく表示"
+        case .setDepth(let on): return on ? "距離の推定をオン" : "距離の推定をオフ"
+        case .measureDistance: return "正面までの距離"
         case .cancel: return "キャンセル"
         case .ask(let q): return "質問：\(q)"
         }

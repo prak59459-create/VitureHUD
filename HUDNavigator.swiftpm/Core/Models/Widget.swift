@@ -2,7 +2,7 @@ import Foundation
 
 /// ウィジェットが動作に必要とするサービス。表示中のウィジェットだけサービスを起動する（省電力）。
 public enum WidgetRequirement: String, Codable, CaseIterable, Sendable {
-    case location, heading, motion, weather, navigation, camera, battery, assistant, alerts, bluetooth
+    case location, heading, motion, weather, navigation, camera, battery, assistant, alerts, bluetooth, pedometer, headTracking, depth
 }
 
 public enum WidgetKind: String, Codable, CaseIterable, Sendable {
@@ -29,6 +29,9 @@ public enum WidgetKind: String, Codable, CaseIterable, Sendable {
     case horizon
     case hourlyForecast
     case nearbyPlaces
+    case steps
+    case headPose
+    case distance
 
     public var displayName: String {
         switch self {
@@ -55,6 +58,9 @@ public enum WidgetKind: String, Codable, CaseIterable, Sendable {
         case .horizon: return "水平器"
         case .hourlyForecast: return "時間ごとの天気"
         case .nearbyPlaces: return "周辺施設"
+        case .steps: return "歩数・気圧"
+        case .headPose: return "頭の向き"
+        case .distance: return "距離・障害物"
         }
     }
 
@@ -84,6 +90,9 @@ public enum WidgetKind: String, Codable, CaseIterable, Sendable {
         case .horizon: return "level"
         case .hourlyForecast: return "clock.badge.checkmark"
         case .nearbyPlaces: return "mappin.and.ellipse"
+        case .steps: return "shoeprints.fill"
+        case .headPose: return "rotate.3d"
+        case .distance: return "ruler"
         }
     }
 
@@ -104,6 +113,9 @@ public enum WidgetKind: String, Codable, CaseIterable, Sendable {
         case .horizon: return [.motion]
         case .hourlyForecast: return [.location, .weather]
         case .nearbyPlaces: return [.location]
+        case .steps: return [.pedometer]
+        case .headPose: return [.headTracking]
+        case .distance: return [.depth]
         }
     }
 
@@ -131,6 +143,9 @@ public enum WidgetKind: String, Codable, CaseIterable, Sendable {
         case .horizon: return (0.14, 0.14)
         case .hourlyForecast: return (0.34, 0.14)
         case .nearbyPlaces: return (0.26, 0.18)
+        case .steps: return (0.16, 0.10)
+        case .headPose: return (0.14, 0.14)
+        case .distance: return (0.18, 0.12)
         }
     }
 }

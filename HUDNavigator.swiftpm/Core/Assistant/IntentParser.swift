@@ -46,6 +46,18 @@ public struct IntentParser: Sendable {
         if has("カメラモード", "カメラに切り替え", "カメラに変更", "カメラにして", "カメラ表示", "カメラ背景", "パススルー") { return .setBackground(.camera) }
         if has("黒にして", "真っ黒", "まっくろ") { return .setBackground(.black) }
 
+        // 距離・3D
+        if has("何メートル", "なんメートル", "何m", "距離を測", "距離をはか", "きょりをはか", "どのくらい離れ", "どれくらい離れ") { return .measureDistance }
+        if has("3dスキャン", "スキャン", "すきゃん", "立体的に記録", "3d化") { return .open(.scan3D) }
+        if has("距離の推定", "距離推定", "奥行き", "深度", "距離モード", "障害物検知", "障害物警告") { return .setDepth(!negative) }
+
+        // 頭の動き（正面合わせ・空間固定・チラ見）
+        if has("正面", "しょうめん") && has("リセット", "合わせ", "あわせ", "戻", "もど", "にして", "設定", "決め") { return .recenterHead }
+        if has("固定", "こてい") && has("hud", "空間", "画面", "表示", "ヘッド", "頭") {
+            return .setHeadLock(!(negative || has("解除", "かいじょ", "外し", "はずし")))
+        }
+        if has("チラ見", "ちらみ", "下を見") { return .setGlanceMode(!(negative && !has("表示")) && !has("解除", "やめ")) }
+
         // HUD
         if has("hud", "ハッド", "はっど", "ヘッドアップ") {
             if has("編集", "へんしゅう") { return .open(.hudEditor) }
@@ -224,6 +236,9 @@ public struct IntentParser: Sendable {
         case .horizon: return ["水平器", "すいへいき", "水平"]
         case .hourlyForecast: return ["時間ごとの天気", "天気予報", "予報"]
         case .nearbyPlaces: return ["周辺施設", "近くの施設"]
+        case .steps: return ["歩数", "ほすう", "万歩計", "気圧"]
+        case .headPose: return ["頭の向き", "あたまのむき"]
+        case .distance: return ["距離計", "障害物", "きょり"]
         }
     }
 

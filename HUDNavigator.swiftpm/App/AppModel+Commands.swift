@@ -174,6 +174,22 @@ extension AppModel {
             history.stop(settings: settings.history)
             refreshServices()
             return CommandOutcome(message: "移動の記録を終了して保存しました。")
+        case .recenterHead:
+            headTracking.recenter()
+            return CommandOutcome(message: settings.headTracking.source == .off ? "頭の動きを使う設定になっていません（設定 → 頭の動き）。" : "今の向きを正面にしました。")
+        case .setHeadLock(let on):
+            if on && settings.headTracking.source == .off { settings.headTracking.source = .airPods }
+            settings.headTracking.headLock = on
+            return CommandOutcome(message: on ? "HUD を空間に固定しました（\(settings.headTracking.source.displayName)）。" : "HUD の固定を解除しました。")
+        case .setGlanceMode(let on):
+            if on && settings.headTracking.source == .off { settings.headTracking.source = .airPods }
+            settings.headTracking.glanceMode = on
+            return CommandOutcome(message: on ? "下を見たときだけ詳しく表示します。" : "常に詳しく表示します。")
+        case .setDepth(let on):
+            settings.depth.enabled = on
+            return CommandOutcome(message: on ? "距離の推定をオンにしました（\(DepthService.resolve(settings.depth.source).displayName)）。" : "距離の推定をオフにしました。")
+        case .measureDistance:
+            return measureDistanceOutcome()
         case .cancel:
             return CommandOutcome(message: "キャンセルしました。", speak: false)
         case .ask(let question):
@@ -258,6 +274,9 @@ extension AppModel {
         case .weather:
             selectedTab = .settings
             settingsPath = [.weather]
+        case .scan3D:
+            selectedTab = .vision
+            showsScan3D = true
         }
     }
 

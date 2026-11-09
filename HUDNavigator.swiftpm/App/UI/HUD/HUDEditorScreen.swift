@@ -302,6 +302,8 @@ struct WidgetConfigEditor: View {
             case .customText:
                 TextField("表示するテキスト", text: binding(\.text, ""))
                     .textFieldStyle(.roundedBorder)
+                Text("使える記号：" + TemplateRenderer.tokens.map { "\($0.token)＝\($0.description)" }.joined(separator: "、"))
+                    .font(.caption2).foregroundStyle(.secondary)
             default:
                 EmptyView()
             }

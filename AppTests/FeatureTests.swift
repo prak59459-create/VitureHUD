@@ -148,6 +148,68 @@ final class FeatureTests: XCTestCase {
         model.settings.map.engine = .appleMapKit
     }
 
+    func testHeadAndDepthCommands() async {
+        model.settings.headTracking = HeadTrackingSettings()
+        await model.perform(.setHeadLock(true))
+        XCTAssertTrue(model.settings.headTracking.headLock)
+        XCTAssertEqual(model.settings.headTracking.source, .airPods, "未設定なら AirPods を使う")
+        await model.perform(.setGlanceMode(true))
+        XCTAssertTrue(model.settings.headTracking.glanceMode)
+        let recenter = await model.perform(.recenterHead)
+        XCTAssertFalse(recenter.message.isEmpty)
+        model.settings.headTracking = HeadTrackingSettings()
+
+        await model.perform(.setDepth(true))
+        XCTAssertTrue(model.settings.depth.enabled)
+        let measure = await model.perform(.measureDistance)
+        XCTAssertFalse(measure.message.isEmpty, "カメラが動いていなくても理由を答える")
+        await model.perform(.setDepth(false))
+        XCTAssertFalse(model.settings.depth.enabled)
+
+        await model.perform(.open(.scan3D))
+        XCTAssertTrue(model.showsScan3D)
+        model.showsScan3D = false
+    }
+
+    func testHeadGestureRunsConfiguredAction() {
+        model.background = .camera
+        model.settings.headTracking.shakeAction = .toggleBackground
+        model.handleHeadGesture(.shake)
+        XCTAssertEqual(model.background, .black)
+        model.settings.headTracking.nodAction = .none
+        model.handleHeadGesture(.nod)
+        XCTAssertEqual(model.background, .black, "「何もしない」は何もしない")
+        model.settings.headTracking = HeadTrackingSettings()
+    }
+
+    func testHeadTrackingHubRelativePoseAndGlance() {
+        let hub = HeadTrackingService()
+        var s = HeadTrackingSettings()
+        s.source = .device
+        s.glanceMode = true
+        s.smoothing = 0
+        hub.configure(settings: s, active: true, motion: MotionService())
+        hub.ingest(HeadPose(yaw: 30, pitch: 0, roll: 0))
+        hub.ingest(HeadPose(yaw: 40, pitch: -20, roll: 0))
+        XCTAssertEqual(hub.pose?.yaw ?? 0, 10, accuracy: 1e-6, "最初の向きからのずれ")
+        XCTAssertTrue(hub.isGlancing, "下を 20 度見たらチラ見")
+        hub.recenter()
+        XCTAssertEqual(hub.pose, .zero)
+        hub.configure(settings: s, active: false, motion: MotionService())
+        XCTAssertNil(hub.pose)
+        XCTAssertEqual(hub.activeSource, .off)
+    }
+
+    func testGlanceModeHidesDetailsUntilLookingDown() {
+        model.settings.headTracking = HeadTrackingSettings()
+        let all = model.effectivePanels.count
+        XCTAssertGreaterThan(all, 0)
+        model.settings.headTracking.glanceMode = true
+        // 頭の向きがまだない（センサー未接続）ときは全部表示
+        XCTAssertEqual(model.effectivePanels.count, all)
+        model.settings.headTracking = HeadTrackingSettings()
+    }
+
     func testSuggestionAcceptRunsAction() async throws {
         model.background = .camera
         model.present(Suggestion(key: "test", title: "テスト", message: "黒背景にします", action: .setBackground(.black)))

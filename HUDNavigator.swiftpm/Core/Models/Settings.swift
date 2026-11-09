@@ -392,6 +392,8 @@ public struct AppSettings: Codable, Hashable, Sendable {
     public var display = HUDDisplaySettings()
     public var bluetooth = BluetoothSettings()
     public var proactive = ProactiveSettings()
+    public var headTracking = HeadTrackingSettings()
+    public var depth = DepthSettings()
     public var selectedPresetID: UUID? = nil
     public var hasCompletedOnboarding: Bool = false
     public var showsMetricsOverlay: Bool = false
