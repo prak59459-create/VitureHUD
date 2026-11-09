@@ -38,7 +38,7 @@ flowchart LR
         Sync["データ・同期"]
         Privacy["プライバシー・通信ログ"]
         Shortcuts["ショートカット"]
-        Advanced["詳細・診断・セルフテスト"]
+        Advanced["詳細・診断・実機テストモード"]
     end
 
     Home --> HUD & NAV & VIS & Assistant & SET

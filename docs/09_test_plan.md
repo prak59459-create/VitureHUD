@@ -1,14 +1,18 @@
 # 09. テスト計画
 
-## 1. 前提：Swift Playgrounds ではテストターゲットが使えない可能性
+## 1. 前提：検証の大半は GitHub Actions、実機は週7回まで
 
-XCTest / Swift Testing のテストターゲットを Swift Playgrounds の App プロジェクトで使える見込みは低い【未確認】。そこで3層で検証する。
+（改訂：ユーザー指示により、ビルドとテストは GitHub Actions、実機は AltStore で週7回までとする。詳細は [13_ci_altstore_pipeline.md](13_ci_altstore_pipeline.md)）
 
-| 層 | 対象 | 方法 |
-|----|------|------|
-| ① ロジックテスト | `Domain/`（LayoutEngine, RouteProgressEngine, GuidancePlanner, HazardEvaluator, IntentParser, AlertPolicy, Codable往復） | **アプリ内セルフテスト**（`Diagnostics/SelfTestRunner`）。設定→詳細→セルフテストで実行し、合否を一覧表示。将来 `Domain/` を Swift Package に切り出せば、GitHub Actions 等で `swift test` も可能 |
-| ② シミュレーション | センサー・ナビ・検出 | **モック・再生**：GPX再生（位置）、記録済みモーション再生、静止画/録画動画を検出パイプラインへ入力 |
-| ③ 実機テスト | 外部ディスプレイ、カメラ、発熱、視認性、屋外GPS | チェックリスト＋計測値の記録（本書 §4） |
+| 層 | 対象 | 実行場所 | 方法 |
+|----|------|----------|------|
+| ① ロジックテスト | `HUDCore`（LayoutEngine, RouteProgressEngine, GuidancePlanner, HazardEvaluator, IntentParser, AlertPolicy, PowerPolicy, Codable往復, GPX読込） | **GitHub Actions：ubuntu**（全 push / PR） | XCTest（`swift test`） |
+| ② サービス結合テスト | モックを使った AppState・CommandBus・DisplayManager の状態遷移、ナビ（GPX再生）、検出パイプライン（固定画像・動画） | **GitHub Actions：macOS / iOS シミュレータ** | XCTest |
+| ③ スナップショット | HUD・テーマ・プリセット・各ウィジェットの見た目（1920×1080、iPad、iPhone 15 サイズ、黒背景） | **GitHub Actions：macOS** | `ImageRenderer` で PNG 化 → 基準画像と比較、差分 PNG をアーティファクトに保存。ユーザーは PR 上で画像を確認できる |
+| ④ ネットワーク依存テスト | MapKit 検索・ルート、Open-Meteo | GitHub Actions：nightly（PR をブロックしない） | XCTest |
+| ⑤ 実機テスト | 外部ディスプレイ、カメラ、発熱、視認性、屋外GPS、マイク | **AltStore でインストールした実機（週7回まで）** | アプリ内「実機テストモード」のチェックリスト＋計測 → JSON レポートを書き出して Issue に添付（本書 §4） |
+
+**PR のマージ条件：** ①〜③ が全て成功していること。
 
 ## 2. ロジックテスト例
 
@@ -27,7 +31,7 @@ XCTest / Swift Testing のテストターゲットを Swift Playgrounds の App 
 
 ## 3. シミュレーション
 
-- **GPX再生**：自宅周辺の徒歩ルートを一度記録（iPhone）→ iPad で再生しナビを検証（iPad Wi-Fi モデルでもナビの開発ができる）。
+- **GPX再生**：CI では **架空ルート／公共の場所のみ** の GPX をリポジトリに置いて使う（公開リポジトリのため自宅周辺は不可）。個人の実ルートはアプリ内で記録・再生し、端末の外に出さない（iPad Wi-Fi モデルでもナビの開発ができる）。
 - **検出の再生**：歩道の動画を `AVAssetReader` で読み、検出パイプラインに流す → 誤検知・検知漏れの確認、fps計測。
 - **外部ディスプレイなしの確認**：端末画面上に「1920×1080 プレビュー枠」を表示するデバッグ機能。
 
@@ -78,6 +82,13 @@ XCTest / Swift Testing のテストターゲットを Swift Playgrounds の App 
 - 通信ログに、天気・クラウドAI以外の通信がない
 - 危険検知の初回利用時に「実験機能」の説明と同意が表示される
 
-## 5. 各Phaseの完了判定
+## 5. 実機テストの進め方（週7回まで）
 
-Phase ごとに「ロジックテスト全合格＋該当実機チェックリスト実施」を完了条件とし、結果を `docs/test_reports/phaseN.md` に残す。
+1. 週の終わりに `device-build` ワークフローで Release IPA を作る。Release ノートに「今回の実機チェックリスト」（変更点に関係する §4 の項目のみ）を自動で載せる。
+2. ユーザーが AltStore でインストールし、アプリの「実機テストモード」でチェックリストを実施（項目ごとに合否・メモ。fps・温度・電池・GPS精度は自動記録）。
+3. 結果を JSON で書き出し（位置は既定で丸める）→ GitHub Issue に添付。
+4. 結果を `docs/device_reports/` に記録し、失敗項目は次の PR で修正 → 可能なら CI テストを追加して再発を防ぐ。
+
+## 6. 各Phaseの完了判定
+
+Phase ごとに「CI（①〜③）全合格＋該当実機チェックリスト実施」を完了条件とし、結果を `docs/test_reports/phaseN.md` に残す。

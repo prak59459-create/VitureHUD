@@ -18,7 +18,7 @@ flowchart TD
     BG["背景レイヤー<br/>黒/カメラ"]:::p1
     Panel["HUDパネル基盤<br/>正規化座標・移動・サイズ"]:::p1
     Persist["PersistenceService<br/>(JSON保存)"]:::p1
-    Diag["診断・セルフテスト・メトリクス"]:::p1
+    Diag["診断・実機テストモード・メトリクス"]:::p1
 
     Theme["テーマ・スタイル"]:::p2
     Layout["LayoutEngine<br/>整列・スナップ"]:::p2

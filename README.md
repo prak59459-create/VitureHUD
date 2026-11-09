@@ -23,3 +23,11 @@ VITURE XRグラス × iPad A16 / iPhone 15 向け スマートHUDナビゲーシ
 | 10 | 無料・有料サービス一覧 | [docs/10_services_pricing.md](docs/10_services_pricing.md) |
 | 11 | リスク・制約一覧 | [docs/11_risks_constraints.md](docs/11_risks_constraints.md) |
 | 12 | ユーザーへの確認事項 | [docs/12_open_questions.md](docs/12_open_questions.md) |
+| 13 | ビルド・検証パイプライン（GitHub Actions ＋ AltStore） | [docs/13_ci_altstore_pipeline.md](docs/13_ci_altstore_pipeline.md) |
+
+## 開発・検証の流れ
+
+```
+このリポジトリ ─▶ GitHub Actions（Linuxテスト → iOSビルド・シミュレータテスト・スナップショット）
+               └▶ 未署名 IPA を GitHub Release に添付 ─▶ AltStore で iPad A16 / iPhone 15 にインストール（週7回まで）
+```

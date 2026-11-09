@@ -1,5 +1,9 @@
 # 01. 技術調査レポート
 
+> **改訂（2026-11-09）**：ビルド・テストは GitHub Actions、実機インストールは AltStore に変更した（[13_ci_altstore_pipeline.md](13_ci_altstore_pipeline.md)）。
+> 以下 §1 の Swift Playgrounds の制約は「Playgrounds で開発する場合」の調査結果として残す。新方針では **Info.plist 編集・XCTest・`.mlmodel` のビルド時コンパイル・App Intents のメタデータ生成・iPhone 15 へのインストールの制約は解消** する。
+> 一方、**無料 Apple ID の制約（7日署名、CloudKit・WeatherKit 不可、アプリ数・App ID 数の上限）** は残る。
+
 凡例：**【確認済】** 公開情報で確認 / **【要実機検証】** 仕様上可能だが本環境で未検証 / **【未確認】** 確認できず、断言しない
 
 ---

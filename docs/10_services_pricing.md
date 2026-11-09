@@ -10,7 +10,12 @@
 | MapKit（地図・検索・ルート・ETA） | ナビ | 無料。アプリ単位の利用量制限・スロットリングあり。公共交通は ETA のみ |
 | AVSpeechSynthesizer | 音声案内 | 無料・オフライン |
 | SFSpeechRecognizer（端末内認識） | 音声入力 | 端末内認識の対応言語・端末に依存【要実機検証】 |
-| Swift Playgrounds | 開発 | 無料 |
+| Swift Playgrounds | UI 試作（任意） | 無料 |
+| **GitHub Actions**（ホストランナー、ubuntu / macOS） | ビルド・テスト・IPA 作成 | **公開リポジトリは無料**。同時実行数・ジョブ時間に上限あり。リポジトリを非公開にすると無料枠の分数制になり macOS は消費が大きい【要確認】 |
+| GitHub Releases | IPA 配布 | 無料（公開されることに注意） |
+| XcodeGen | プロジェクト生成（CI 上） | 無料（MIT ライセンス） |
+| **AltStore**（＋AltServer） | 実機インストール | 無料。無料 Apple ID で署名（7日）。更新に AltServer（Mac/Windows PC）が必要な場合あり |
+| 無料 Apple ID | AltStore の署名 | 無料。同時アプリ数・App ID 登録数に上限、CloudKit 等は不可 |
 
 ## 2. 無料（外部サービス）— 条件付き
 
@@ -24,7 +29,7 @@
 
 | サービス | 用途 | 費用の目安 | APIキー | 本計画での扱い |
 |----------|------|-----------|---------|----------------|
-| **Apple Developer Program** | TestFlight で iPhone 15 に配布、WeatherKit、App Store 公開 | 年会費（日本では年額 12,980円 と案内されてきた。最新額は公式で要確認） | — | **iPhone 15 で動かすには必要になる可能性が高い**（Mac が無い場合）→ [Q2](12_open_questions.md) |
+| Apple Developer Program | 1年署名、TestFlight、WeatherKit、CloudKit、App Store 公開 | 年会費（日本では年額 12,980円 と案内されてきた。最新額は公式で要確認） | — | **必須ではない**（AltStore で代替）。7日更新が負担になった場合・公開する場合に検討 |
 | Google Maps SDK for iOS | 地図表示 | 無料・無制限とされる（請求先登録は必要）【第三者情報】 | 必要 | Phase 6 以降に判断 |
 | Google Routes API | ルート | 月の無料枠（Essentials 10,000件等）超過で従量課金（例：1,000件あたり $5〜）【要確認】 | 必要 | 同上 |
 | Google Places API | 施設・営業時間・評価 | SKU ごとの無料枠＋従量課金【要確認】 | 必要 | 同上 |
@@ -34,7 +39,7 @@
 | クラウドTTS（高品質音声） | AI音声 | 多くが従量課金 | 必要 | 採用しない（iOS標準音声を使う） |
 | Open-Meteo 商用プラン | 天気（商用公開時） | 月額 | 必要 | App Store で有料・広告付き公開する場合に検討 |
 | Ultralytics YOLO 商用ライセンス | 物体検出モデル | 有料 | — | 採用しない（AGPL回避のため別モデル） |
-| Working Copy（iPad用Gitクライアント）の有料機能 | git push | 買い切り/サブスク【要確認】 | — | 任意。ZIP受け渡しなら不要 |
+| Working Copy（iPad用Gitクライアント）の有料機能 | git push | 買い切り/サブスク【要確認】 | — | 不要（開発はこのリポジトリと GitHub Actions で完結） |
 
 ## 4. ハードウェア（費用参考）
 
@@ -53,4 +58,4 @@
 | クラウドLLM（任意） | ユーザー | Keychain |
 | Open-Meteo（非商用） | 不要 | — |
 
-**APIキーをソースコード・このリポジトリにコミットしない。**
+**APIキーをソースコード・このリポジトリにコミットしない。** リポジトリ・Release は公開されるため、IPA にもAPIキーを埋め込まない（アプリ内でユーザーが入力し Keychain に保存）。

@@ -4,14 +4,18 @@
 
 | 項目 | 採用 | 理由 |
 |------|------|------|
-| 開発環境 | Swift Playgrounds 4.7 以降（iPad A16） | 計画書の指定。Swift 6 / iOS 26 SDK 同梱 |
+| ビルド・テスト | **GitHub Actions**（`ubuntu-latest`＋`macos-26`、Xcode 26 系を固定） | 公開リポジトリは無料。Mac 不要（[13](13_ci_altstore_pipeline.md)） |
+| プロジェクト生成 | **XcodeGen**（`project.yml` → `.xcodeproj`、CI 上で生成） | Info.plist・権限・シーン設定をテキストで管理できる |
+| 実機インストール | **AltStore**（無料 Apple ID で署名、7日ごとに更新） | iPad A16・iPhone 15 の両方に入れられる |
+| 補助ツール | Swift Playgrounds（任意） | iPad 上での UI 試作のみ |
 | 言語 | Swift 6（言語モード 6） | 厳格な並行性チェックでデータ競合を防ぐ |
+| テスト | XCTest（`HUDCore` は Linux / macOS、アプリは iOS シミュレータ） | CI で自動実行 |
 | UI | SwiftUI（主）＋ UIKit（外部ディスプレイのシーン管理、カメラプレビュー） | SwiftUI だけでは外部画面シーンを細かく制御できないため |
-| 最低対応OS | **iOS / iPadOS 18.0** | Swift Playgrounds 4.7 の動作要件と揃える。`@Observable`、`Map` の新API、`CLLocationUpdate` が使える |
+| 最低対応OS | **iOS / iPadOS 18.0** | `@Observable`、`Map` の新API、`CLLocationUpdate` が使える。両端末とも iOS 26 まで対応 |
 | 状態管理 | Observation（`@Observable`）＋ 依存注入用の `AppEnvironment` | iOS 17+ 標準。外部画面と端末画面で同じ状態を共有しやすい |
 | 非同期 | Swift Concurrency（`async/await`、`AsyncStream`、`actor`） | センサーストリームの統一 |
-| プロジェクト形式 | `.swiftpm` App プロジェクト（単一アプリターゲット＋フォルダで層分け） | Playgrounds の制約に合わせる |
-| 外部パッケージ | **原則なし**（Phase 0〜5） | Playgrounds 互換性・ライセンス・保守のリスクを避ける |
+| プロジェクト形式 | アプリターゲット1つ（App Extension なし）＋ Swift Package `HUDCore` | AltStore 無料アカウントの App ID 上限を消費しない |
+| 外部パッケージ | **原則なし**（Phase 0〜5） | ライセンス・保守のリスクを避ける |
 
 ## 2. 機能別フレームワーク
 
@@ -49,8 +53,12 @@
 | サードパーティ製 UI ライブラリ | 不採用 | 依存を増やさない |
 | Ultralytics YOLO 系モデル | 原則不採用 | AGPL-3.0（ソース公開義務）。代替モデルを優先 |
 
-## 4. 将来 Xcode（Mac）へ移行した場合に解放されるもの
+## 4. GitHub Actions＋Xcode ビルドへの移行で使えるようになったもの
 
-- CloudKit による自動同期、WeatherKit、WidgetKit（ホーム画面ウィジェット／ロック画面）、watchOS アプリ、Info.plist の細かな設定、XCTest によるユニットテスト、Swift Package のバイナリ依存（Google Maps SDK）
+- Info.plist の細かな設定（外部ディスプレイ用シーン、バックグラウンドモード）、XCTest、`.mlmodel` のビルド時コンパイル、App Intents のメタデータ生成、Swift Package のバイナリ依存（Google Maps SDK 等）
+
+## 5. 有料 Apple Developer Program に加入した場合に解放されるもの
+
+- CloudKit による自動同期、WeatherKit、1年署名（7日更新が不要）、TestFlight、App Extension（ウィジェット）を App ID 上限を気にせず追加
 
 アーキテクチャはこの移行を想定し、**サービスをプロトコルで抽象化**しておく（例：`SyncService` を「ファイル同期版」→「CloudKit版」に差し替え可能）。

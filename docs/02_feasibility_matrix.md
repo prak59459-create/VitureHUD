@@ -9,6 +9,23 @@
 
 「検証」欄：Phase 0 スパイク番号（[08_roadmap.md](08_roadmap.md)）または実装フェーズ。
 
+> **改訂（2026-11-09）：GitHub Actions＋AltStore 方針による分類の変更**
+>
+> | 機能 | 旧 | 新 | 理由 |
+> |------|----|----|------|
+> | 外部ディスプレイ独立表示 | B（Playgrounds内で不明） | B（実機確認のみ残る） | 通常アプリとしてインストール、Info.plist でシーン設定可能 |
+> | iPhone 15 での動作 | 有料Program か Mac が必要 | A | AltStore でインストール |
+> | Core ML モデル同梱 | B（実行時コンパイル） | A〜B | Xcode がビルド時にコンパイル。実機の速度は要確認 |
+> | App Intents（ショートカット） | B【未確認】 | B（実機確認のみ） | Xcode ビルドでメタデータ生成 |
+> | 画面ロック中の音声案内（バックグラウンド） | B | B（Info.plist で設定可能） | バックグラウンドモードを `project.yml` で指定 |
+> | ユニットテスト | D（Playgrounds） | A | XCTest を CI で実行 |
+> | Google Maps SDK 導入 | C（バイナリ依存不明） | C | 技術的には導入可能。APIキー・課金の条件は変わらず |
+> | ホーム画面ウィジェット | D（拡張不可） | D（App ID を消費するため見送り） | 無料 Apple ID の上限 |
+> | CloudKit / WeatherKit | D | D | 無料 Apple ID では使えない（有料Programで解消） |
+> | Apple Watch | D | D | AltStore での watchOS 導入は想定しない |
+>
+> 下表の個別記述のうち Swift Playgrounds を理由にしたものは、上の表が優先する。
+
 ## 2. 外部ディスプレイ
 
 | 機能 | 分類 | 条件・理由 | 代替案 | 検証 |
