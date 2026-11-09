@@ -81,6 +81,7 @@ struct HistoryView: View {
             } footer: {
                 Text("AI には集計値だけを送ります（位置は送りません）。クラウドAIが未設定の場合は端末内の集計だけを表示します。")
             }
+            VisitsAndUsageSections()
             Section("記録の一覧") {
                 ForEach(trips.reversed()) { trip in
                     VStack(alignment: .leading) {
@@ -208,13 +209,14 @@ struct SyncView: View {
 
     var body: some View {
         Form {
+            SyncFolderSection()
             Section {
-                Text("iPad と iPhone で設定をそろえるには、片方で「書き出し」→「ファイルに保存」で iCloud Drive に保存し、もう片方で「読み込み」を選びます。")
+                Text("手動で同期する場合は、片方で「書き出し」→「ファイルに保存」で iCloud Drive に保存し、もう片方で「読み込み」を選びます。")
                     .font(.subheadline)
             } header: {
-                Text("同期のしかた")
+                Text("手動の同期")
             } footer: {
-                Text("自動同期（iCloud / CloudKit）は有料の Apple Developer Program が必要なため、ファイルでの同期にしています。")
+                Text("CloudKit（Apple のクラウドデータベース）は有料の Apple Developer Program が必要なため、iCloud Drive のフォルダを使って同期しています。")
             }
             Section("書き出し") {
                 Toggle("移動履歴も含める", isOn: $includeHistory)
@@ -265,6 +267,9 @@ struct PrivacyView: View {
                 Label("音声：端末内で文字にする（設定による）", systemImage: "mic")
                 Label("移動履歴：保存は任意（初期はオフ）・端末内のみ", systemImage: "clock")
                 Label("AIへの質問：クラウドAIを設定・同意した場合のみ、文字だけを送信", systemImage: "cloud")
+                Label("Google Maps：APIキーを設定・同意した場合のみ、検索語と丸めた位置を送信", systemImage: "globe.asia.australia")
+                Label("心拍計：Bluetooth で端末内に受信するだけ（保存・送信しない）", systemImage: "heart")
+                Label("同期：選んだ iCloud Drive のフォルダにだけ書き出す", systemImage: "icloud")
             }
             .font(.footnote)
             Section("設定") {
@@ -287,7 +292,7 @@ struct PrivacyView: View {
             } header: {
                 Text("通信ログ（このアプリからの外部通信）")
             } footer: {
-                Text("地図・検索・経路は Apple の MapKit を使います（Apple のサービスとの通信はこの一覧に含まれません）。")
+                Text("地図・検索・経路は標準では Apple の MapKit を使います（Apple のサービスとの通信と iCloud Drive の同期はこの一覧に含まれません）。Google Maps を使う設定にした場合の通信はこの一覧に記録されます。")
             }
             Section {
                 Button("すべてのデータを削除", role: .destructive) { confirmDelete = true }
@@ -320,9 +325,10 @@ struct AssistantSettingsView: View {
                     ForEach(AssistantProviderKind.allCases, id: \.self) { Text($0.displayName).tag($0) }
                 }
                 Toggle("回答を読み上げる", isOn: $model.settings.assistant.speaksResponses)
+                Toggle("AI にアプリを操作してもらう", isOn: $model.settings.assistant.allowsAICommands)
                 Toggle("音声認識は端末内だけで行う", isOn: $model.settings.assistant.requiresOnDeviceSpeech)
             } footer: {
-                Text("「端末内のみ」でも、音声コマンド（背景切替・ナビ・ウィジェット表示など）と時刻・電池・到着予定などの読み上げは使えます。端末内の生成AI（Apple Intelligence）は A16 チップでは使えません。")
+                Text("「端末内のみ」でも、音声コマンド（背景切替・ナビ・ウィジェット表示など）と時刻・電池・到着予定などの読み上げは使えます。端末内の生成AI（Apple Intelligence）は A16 チップでは使えません。「AI にアプリを操作してもらう」をオンにすると、決まった言い方に当てはまらない依頼（例：「暗い所でも見やすくして」）をクラウドAIが操作の一覧から選んで実行します（最大4つ・一覧にない操作はしません）。")
             }
             if s.provider.isCloud {
                 Section {
@@ -413,11 +419,37 @@ struct ShortcutsInfoView: View {
             } footer: {
                 Text("ショートカット App の「アクションを追加」で「HUD Navigator」を検索してください。")
             }
+            Section {
+                ForEach([
+                    ("hudnavigator://hud/start", "HUD を開始"),
+                    ("hudnavigator://background/toggle", "背景を切り替え"),
+                    ("hudnavigator://preset/next", "次のプリセット"),
+                    ("hudnavigator://navigate?to=東京駅", "目的地へナビ"),
+                    ("hudnavigator://nearby/cafe", "近くのカフェ"),
+                    ("hudnavigator://voice", "音声アシスタント"),
+                ], id: \.0) { url, title in
+                    VStack(alignment: .leading) {
+                        Text(title)
+                        Text(url).font(.caption.monospaced()).foregroundStyle(.secondary)
+                    }
+                }
+            } header: {
+                Text("URL で操作")
+            } footer: {
+                Text("ショートカット App の「URL を開く」や、ホーム画面のウィジェット（ウィジェット付きの IPA）から呼び出せます。")
+            }
             #else
             Section {
-                Text("ショートカット連携は正式アプリ（AltStore でインストールした IPA）でのみ使えます。Swift Playgrounds 版では使えません。")
+                Text("ショートカット連携・URL での操作は正式アプリ（AltStore でインストールした IPA）でのみ使えます。Swift Playgrounds 版では使えません。")
             }
             #endif
+            Section {
+                ForEach([("⌘U", "HUD を表示・閉じる"), ("⌘B", "背景を切り替え"), ("⌘→ / ⌘←", "次・前のプリセット"), ("⌘K", "音声で話しかける"), ("⌘R", "案内をもう一度")], id: \.0) { key, title in
+                    LabeledContent(title, value: key)
+                }
+            } header: {
+                Text("キーボード（iPad）")
+            }
         }
         .navigationTitle("ショートカット")
     }

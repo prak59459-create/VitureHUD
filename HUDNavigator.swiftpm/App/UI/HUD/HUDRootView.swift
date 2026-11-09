@@ -6,16 +6,53 @@ struct HUDRootView: View {
     @Environment(AppModel.self) private var model
     let surface: HUDSurface
 
+    /// グラスの 3D モード（左右分割）で表示するか
+    private var isStereo: Bool { surface == .external && model.settings.display.stereo3D }
+
     var body: some View {
         GeometryReader { geo in
             let size = geo.size
-            let canvas = model.layout.canvas
-            let content = CGSize(width: size.width * canvas.scale, height: size.height * canvas.scale)
-            let origin = CGPoint(
-                x: (size.width - content.width) / 2 + canvas.offsetX * size.width,
-                y: (size.height - content.height) / 2 + canvas.offsetY * size.height
-            )
-            ZStack(alignment: .topLeading) {
+            Group {
+                if isStereo {
+                    // 左右の目に半分ずつ（横に半分に縮める）。奥行きは左右の画像のずらしで表現する。
+                    let depth = model.settings.display.stereoDepth * size.height / 1080
+                    HStack(spacing: 0) {
+                        eye(size: size, parallax: depth / 2)
+                        eye(size: size, parallax: -depth / 2)
+                    }
+                } else {
+                    scene(size: size, parallax: 0)
+                }
+            }
+            .frame(width: size.width, height: size.height)
+            .clipped()
+        }
+        .background(Color.black)
+    }
+
+    private func eye(size: CGSize, parallax: CGFloat) -> some View {
+        scene(size: size, parallax: parallax)
+            .frame(width: size.width, height: size.height)
+            .scaleEffect(x: 0.5, y: 1)
+            .frame(width: size.width / 2, height: size.height)
+            .clipped()
+    }
+
+    private func scene(size: CGSize, parallax: CGFloat) -> some View {
+        let canvas = model.layout.canvas
+        let content = CGSize(width: size.width * canvas.scale, height: size.height * canvas.scale)
+        let head = headLockOffset(size: size)
+        let origin = CGPoint(
+            x: (size.width - content.width) / 2 + canvas.offsetX * size.width + head.width + parallax,
+            y: (size.height - content.height) / 2 + canvas.offsetY * size.height + head.height
+        )
+        // 明るさ（夜間は自動で暗く）。編集中・サムネイルは常に 100%
+        let brightness = surface.isEditable || surface == .thumbnail ? 1 : model.hudBrightness
+        return ZStack(alignment: .topLeading) {
+            if isStereo {
+                // 3D では背景は黒（＝透明）。カメラ映像は左右に複製できないため。
+                Color.black.frame(width: size.width, height: size.height)
+            } else {
                 HUDBackgroundLayer(surface: surface)
                     .frame(width: size.width, height: size.height)
 
@@ -23,37 +60,47 @@ struct HUDRootView: View {
                     DetectionOverlay()
                         .frame(width: size.width, height: size.height)
                 }
+            }
 
-                HUDPanelsLayer(surface: surface, canvasSize: content)
+            HUDPanelsLayer(surface: surface, canvasSize: content)
+                .frame(width: content.width, height: content.height)
+                .offset(x: origin.x, y: origin.y)
+                .opacity(brightness)
+
+            if surface.isEditable {
+                EditorInteractionLayer(canvasSize: content)
                     .frame(width: content.width, height: content.height)
                     .offset(x: origin.x, y: origin.y)
-
-                if surface.isEditable {
-                    EditorInteractionLayer(canvasSize: content)
-                        .frame(width: content.width, height: content.height)
-                        .offset(x: origin.x, y: origin.y)
-                }
-
-                if surface != .thumbnail {
-                    HUDAlertLayer(canvasSize: content)
-                        .frame(width: content.width, height: content.height)
-                        .offset(x: origin.x, y: origin.y)
-                        .allowsHitTesting(false)
-
-                    SystemIndicatorLayer(surface: surface, canvasSize: size)
-                        .frame(width: size.width, height: size.height)
-                        .allowsHitTesting(false)
-                }
-
-                if surface == .external && model.showsTestPattern {
-                    VisibilityTestPattern()
-                        .frame(width: size.width, height: size.height)
-                }
             }
-            .frame(width: size.width, height: size.height)
-            .clipped()
+
+            if surface != .thumbnail {
+                HUDAlertLayer(canvasSize: content)
+                    .frame(width: content.width, height: content.height)
+                    .offset(x: origin.x, y: origin.y)
+                    .opacity(max(brightness, 0.7))
+                    .allowsHitTesting(false)
+
+                SystemIndicatorLayer(surface: surface, canvasSize: size)
+                    .frame(width: size.width, height: size.height)
+                    .allowsHitTesting(false)
+            }
+
+            if surface == .external && model.showsTestPattern {
+                VisibilityTestPattern()
+                    .frame(width: size.width, height: size.height)
+            }
         }
-        .background(Color.black)
+        .frame(width: size.width, height: size.height)
+    }
+
+    /// AirPods の頭の向きで HUD を逆向きにずらす（頭を動かしても HUD が空間に留まって見える）
+    private func headLockOffset(size: CGSize) -> CGSize {
+        let d = model.settings.display
+        guard d.headLockWithAirPods, !surface.isEditable, surface != .thumbnail, let o = model.motion.headOffset else { return .zero }
+        let perDegree = d.headLockStrength * size.height / 1080
+        let x = (o.yaw * perDegree).clamped(to: -Double(size.width) * 0.6...Double(size.width) * 0.6)
+        let y = (o.pitch * perDegree).clamped(to: -Double(size.height) * 0.6...Double(size.height) * 0.6)
+        return CGSize(width: x, height: y)
     }
 }
 
@@ -140,7 +187,8 @@ struct HUDPanelView: View {
             panelHeight: rect.height,
             canvasHeight: canvasSize.height,
             style: style,
-            minimumFontPixels: model.layout.canvas.minimumFontPixels
+            minimumFontPixels: model.layout.canvas.minimumFontPixels,
+            textScale: model.layout.canvas.textScale
         )
         let demand: Set<WidgetRequirement> = (panel.isVisible && surface != .thumbnail) ? panel.widget.requirements : []
         WidgetContentView(panel: panel, style: style, typography: typography, theme: theme, surface: surface)
@@ -187,6 +235,32 @@ struct DetectionOverlay: View {
             let settings = model.settings.detection
             let theme = model.activeTheme
             ZStack(alignment: .topLeading) {
+                if settings.detectsLanes {
+                    // 路面の線の候補（実験）
+                    Path { p in
+                        for line in model.vision.lanes {
+                            p.move(to: CGPoint(x: ox + line.start.x * displayW, y: oy + line.start.y * displayH))
+                            p.addLine(to: CGPoint(x: ox + line.end.x * displayW, y: oy + line.end.y * displayH))
+                        }
+                    }
+                    .stroke(Color(theme.style.accentColor).opacity(0.8), style: StrokeStyle(lineWidth: max(3, size.height * 0.006), lineCap: .round, dash: [size.height * 0.03, size.height * 0.015]))
+                }
+                if settings.readsSigns {
+                    ForEach(model.vision.signs) { sign in
+                        let r = CGRect(x: ox + sign.box.x * displayW, y: oy + sign.box.y * displayH, width: sign.box.width * displayW, height: sign.box.height * displayH)
+                        let color: Color = sign.reading.isImportant ? Color(theme.warningColor) : Color(theme.style.secondaryTextColor)
+                        RoundedRectangle(cornerRadius: 4)
+                            .stroke(color, style: StrokeStyle(lineWidth: 2, dash: [6, 4]))
+                            .frame(width: r.width, height: r.height)
+                            .position(x: r.midX, y: r.midY)
+                        Text(sign.reading.kind)
+                            .font(.system(size: max(12, size.height * 0.022), weight: .bold, design: .rounded))
+                            .foregroundStyle(color)
+                            .padding(.horizontal, 4)
+                            .background(Color.black.opacity(0.5), in: Capsule())
+                            .position(x: r.midX, y: min(size.height - 10, r.maxY + size.height * 0.02))
+                    }
+                }
                 ForEach(model.vision.detections) { d in
                     let r = CGRect(x: ox + d.box.x * displayW, y: oy + d.box.y * displayH, width: d.box.width * displayW, height: d.box.height * displayH)
                     let level = model.vision.hazards.first { $0.trackID == d.trackID }?.level ?? .none
@@ -308,6 +382,9 @@ struct SystemIndicatorLayer: View {
                 }
                 if model.powerProfile.quality != .normal {
                     indicator("省電力：\(model.powerProfile.quality.displayName)", systemImage: "leaf", color: .green)
+                }
+                if model.settings.display.headLockWithAirPods && model.motion.headOffset != nil {
+                    indicator("空間固定（AirPods）", systemImage: "airpodspro", color: .cyan)
                 }
             }
             if model.settings.showsMetricsOverlay {

@@ -15,6 +15,9 @@ final class SnapshotTests: XCTestCase {
         model.showsOnboarding = false
         if let p = model.presets.first(where: { $0.key == key }) { model.resetPreset(p.id); model.applyPreset(p.id) }
         model.background = .black
+        // 時刻によって明るさが変わらないように
+        model.settings.display = HUDDisplaySettings()
+        model.settings.display.nightDimEnabled = false
         return model
     }
 
@@ -88,6 +91,40 @@ final class SnapshotTests: XCTestCase {
         simulateNavigation(model)
         model.updateCanvas { $0.scale = 0.8; $0.offsetY = 0.05; $0.minimumFontPixels = 36 }
         try render(HUDRootView(surface: .thumbnail), model: model, size: glasses, name: "canvas-scaled-80-minfont36")
+    }
+
+    func testNewWidgets() throws {
+        let model = makeModel(preset: "daily")
+        model.nearbyCategory = .cafe
+        model.nearbyResults = [
+            PlaceResult(name: "カフェ（デモ1）", address: "デモ", coordinate: DemoRoutes.waypoints[1], category: "カフェ", distance: 120),
+            PlaceResult(name: "カフェ（デモ2）", address: "デモ", coordinate: DemoRoutes.waypoints[2], category: "カフェ", distance: 340),
+        ]
+        var text = HUDPanel(widget: .customText, frame: NormalizedRect(x: 0.03, y: 0.8, width: 0.5, height: 0.1), zIndex: 5)
+        text.config.text = "{preset}・心拍{hr}"
+        var l = model.layout
+        l.panels = [
+            HUDPanel(widget: .heartRate, frame: NormalizedRect(x: 0.03, y: 0.05, width: 0.22, height: 0.14), zIndex: 1),
+            HUDPanel(widget: .horizon, frame: NormalizedRect(x: 0.03, y: 0.25, width: 0.22, height: 0.18), zIndex: 2),
+            HUDPanel(widget: .hourlyForecast, frame: NormalizedRect(x: 0.3, y: 0.05, width: 0.4, height: 0.2), zIndex: 3),
+            HUDPanel(widget: .nearbyPlaces, frame: NormalizedRect(x: 0.72, y: 0.05, width: 0.25, height: 0.22), zIndex: 4),
+            text,
+        ]
+        model.layout = l
+        try render(HUDRootView(surface: .thumbnail), model: model, size: glasses, name: "widgets-new")
+        model.updateCanvas { $0.textScale = 1.4 }
+        try render(HUDRootView(surface: .thumbnail), model: model, size: glasses, name: "widgets-new-text140")
+    }
+
+    func testStereoSideBySide() throws {
+        let model = makeModel(preset: "minimal")
+        model.settings.display.stereo3D = true
+        model.settings.display.stereoDepth = 20
+        try render(HUDRootView(surface: .external), model: model, size: glasses, name: "stereo-sbs-minimal")
+        model.settings.display.stereo3D = false
+        model.settings.display.brightness = 0.5
+        try render(HUDRootView(surface: .external), model: model, size: glasses, name: "brightness-50-minimal")
+        model.settings.display = HUDDisplaySettings()
     }
 
     func testVisibilityPattern() throws {

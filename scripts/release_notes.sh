@@ -11,7 +11,8 @@ RUN="${GITHUB_RUN_NUMBER:-local}"
   echo "コミット: \`${SHA:0:7}\`  日時: $(date -u '+%Y-%m-%d %H:%M UTC')"
   echo
   echo "### ファイル"
-  echo "- **HUDNavigator.ipa** … AltStore でインストールする正式アプリ（iPad / iPhone 15）"
+  echo "- **HUDNavigator.ipa** … AltStore でインストールする正式アプリ（iPad / iPhone 15）。まずはこちら"
+  echo "- **HUDNavigator-widgets.ipa** … ホーム画面・ロック画面のウィジェットとコントロールセンターのボタン付き（AltStore の無料アカウントでは App ID を 2 つ使います。7日で10個まで）"
   echo "- **HUDNavigator.swiftpm.zip** … iPad の Swift Playgrounds で開く版（回数無制限で試せます）"
   echo
   echo "### インストール（AltStore）"

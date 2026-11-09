@@ -24,15 +24,26 @@ final class CameraPipeline: NSObject, AVCaptureVideoDataOutputSampleBufferDelega
         set { lock.lock(); _frameHandler = newValue; lock.unlock() }
     }
 
-    func configure(prefersUltraWide: Bool, maxHeight: Int, fps: Int) {
+    /// 接続されている外部カメラ（iPad の USB-C カメラ。iPhone では見つからない）
+    static var externalCameras: [AVCaptureDevice] {
+        AVCaptureDevice.DiscoverySession(deviceTypes: [.external], mediaType: .video, position: .unspecified).devices
+    }
+
+    private var usingExternal = false
+
+    func configure(prefersUltraWide: Bool, useExternal: Bool = false, maxHeight: Int, fps: Int) {
         sessionQueue.async { [self] in
             session.beginConfiguration()
-            session.sessionPreset = maxHeight >= 1080 ? .hd1920x1080 : .hd1280x720
-            if !configured || (device?.deviceType == .builtInUltraWideCamera) != prefersUltraWide {
+            let external = useExternal ? Self.externalCameras.first : nil
+            let preset: AVCaptureSession.Preset = maxHeight >= 1080 ? .hd1920x1080 : .hd1280x720
+            session.sessionPreset = session.canSetSessionPreset(preset) ? preset : .high
+            if !configured || (device?.deviceType == .builtInUltraWideCamera) != prefersUltraWide || (external != nil) != usingExternal {
                 for input in session.inputs { session.removeInput(input) }
                 let preferred: AVCaptureDevice.DeviceType = prefersUltraWide ? .builtInUltraWideCamera : .builtInWideAngleCamera
-                let camera = AVCaptureDevice.default(preferred, for: .video, position: .back)
+                let camera = external
+                    ?? AVCaptureDevice.default(preferred, for: .video, position: .back)
                     ?? AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back)
+                usingExternal = external != nil
                 guard let camera, let input = try? AVCaptureDeviceInput(device: camera), session.canAddInput(input) else {
                     session.commitConfiguration()
                     onRunningChange?(false, "背面カメラを使用できません")
@@ -249,7 +260,7 @@ final class CameraController {
     private func configureAndStart() {
         let s = settingsProvider?() ?? CameraSettings()
         lastError = nil
-        pipeline.configure(prefersUltraWide: s.prefersUltraWide, maxHeight: profile.maxHeight, fps: profile.fps)
+        pipeline.configure(prefersUltraWide: s.prefersUltraWide, useExternal: s.useExternalCamera, maxHeight: profile.maxHeight, fps: profile.fps)
         pipeline.start()
         pipeline.setZoom(s.zoom)
         pipeline.setExposureBias(s.exposureBias)

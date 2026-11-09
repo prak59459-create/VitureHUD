@@ -64,6 +64,8 @@ struct HUDTypography {
     var canvasHeight: CGFloat
     var style: PanelStyle
     var minimumFontPixels: Double
+    /// 文字の倍率（音声コマンド「文字を大きく」・HUD 編集の設定）
+    var textScale: Double = 1
 
     /// 主表示の文字サイズ
     var primarySize: CGFloat { size(0.46) }
@@ -71,8 +73,8 @@ struct HUDTypography {
     var iconSize: CGFloat { size(0.36) }
 
     func size(_ fraction: CGFloat) -> CGFloat {
-        let base = panelHeight * fraction * CGFloat(style.fontScale)
-        let minimum = CGFloat(minimumFontPixels) * (canvasHeight / 1080) * min(1, fraction / 0.22)
+        let base = panelHeight * fraction * CGFloat(style.fontScale) * CGFloat(textScale)
+        let minimum = CGFloat(minimumFontPixels * textScale) * (canvasHeight / 1080) * min(1, fraction / 0.22)
         return max(base, minimum, 8)
     }
 

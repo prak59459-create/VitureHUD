@@ -63,6 +63,15 @@ struct VisionScreen: View {
                         Text("画面の中央で枠が急に大きくなる物体（近づいてくる物体）を警告します。カメラの向き・速さ・手ぶれで結果が変わります。警告が出ないことは安全を意味しません。")
                             .font(.caption).foregroundStyle(.secondary)
                     }
+                    Card(title: "路面の線・標識（実験）", systemImage: "road.lanes") {
+                        Toggle("路面の白線（車線）を表示", isOn: $model.settings.detection.detectsLanes)
+                        Toggle("標識・看板の文字を読む", isOn: $model.settings.detection.readsSigns)
+                        if let sign = model.lastSign {
+                            LabeledContent("最後に読んだ標識", value: "\(sign.kind)（\(sign.text)）")
+                        }
+                        Text("白線は輪郭から「まっすぐで斜めの線」を探す簡易的な推定です。標識は文字（止まれ・徐行・通行止め など）から種類を推定し、重要なものは HUD で知らせます。どちらも見落とし・誤認識があります。")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
                     Card(title: "追加の物体検出モデル（Core ML）", systemImage: "cpu") {
                         Text("自動車・自転車・バイクなどを検出するには、物体検出の Core ML モデル（.mlmodel）を読み込んでください。モデルのライセンス（商用利用・再配布の条件）はご自身で確認してください。")
                             .font(.caption).foregroundStyle(.secondary)
@@ -83,6 +92,12 @@ struct VisionScreen: View {
                         LabeledSlider(title: "ズーム", value: $model.settings.camera.zoom, range: 1...4, format: { String(format: "×%.1f", $0) })
                         LabeledSlider(title: "コントラスト", value: $model.settings.camera.contrast, range: 0.5...1.5, format: { String(format: "%.2f", $0) })
                         Toggle("超広角カメラを使う（iPhone）", isOn: $model.settings.camera.prefersUltraWide)
+                        Toggle("外部カメラを使う（iPad の USB-C カメラ）", isOn: $model.settings.camera.useExternalCamera)
+                        if model.settings.camera.useExternalCamera {
+                            let cameras = CameraPipeline.externalCameras
+                            Text(cameras.isEmpty ? "外部カメラが見つかりません（つなぐと自動で切り替わります。見つからない間は内蔵カメラを使います）。" : "接続中：" + cameras.map(\.localizedName).joined(separator: "、"))
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
                         Text("カメラ映像は端末内でのみ処理し、保存・送信しません。グラスは光学透過のため、カメラ映像は二重に見えることがあります。")
                             .font(.caption).foregroundStyle(.secondary)
                     }

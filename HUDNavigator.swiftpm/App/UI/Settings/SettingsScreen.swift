@@ -3,6 +3,7 @@ import UniformTypeIdentifiers
 
 enum SettingsRoute: Hashable {
     case display, mapVoice, notifications, sensors, history, weather, sync, privacy, assistant, shortcuts, advanced, deviceTest, about, themes, presets, canvas
+    case googleMaps, heartRate, proactive
 }
 
 struct SettingsScreen: View {
@@ -20,12 +21,15 @@ struct SettingsScreen: View {
                 }
                 Section("ナビ・音声") {
                     link(.mapVoice, "地図・ナビ・音声案内", "map")
+                    link(.googleMaps, "Google Maps", "globe.asia.australia", detail: GoogleMapsService.isReady(model.settings.googleMaps) ? "使用する" : "未設定")
                     link(.notifications, "通知・警告", "bell.badge")
                     link(.assistant, "AIアシスタント", "waveform", detail: model.settings.assistant.provider.isCloud ? "クラウド" : "端末内")
+                    link(.proactive, "提案", "lightbulb", detail: model.settings.proactive.enabled ? "オン" : "オフ")
                 }
                 Section("情報") {
                     link(.weather, "天気・環境情報", "cloud.sun")
                     link(.sensors, "センサー情報", "gyroscope")
+                    link(.heartRate, "心拍計（Bluetooth）", "heart", detail: model.settings.bluetooth.heartRateEnabled ? model.heartRate.state.displayName : "オフ")
                     link(.history, "履歴・分析", "chart.xyaxis.line", detail: model.settings.history.enabled ? "記録する" : "記録しない")
                 }
                 Section("データ") {
@@ -75,6 +79,9 @@ struct SettingsScreen: View {
         case .themes: ThemeManagerView()
         case .presets: PresetManagerView()
         case .canvas: CanvasSettingsView()
+        case .googleMaps: GoogleMapsSettingsView()
+        case .heartRate: HeartRateSettingsView()
+        case .proactive: ProactiveSettingsView()
         }
     }
 }
@@ -119,6 +126,7 @@ struct DisplaySettingsView: View {
             } footer: {
                 Text("「ミラーのみ」にすると、独立表示できる場合も端末とグラスの両方に HUD を表示します。")
             }
+            HUDAppearanceSection()
             Section {
                 NavigationLink("表示位置・大きさ・最小文字サイズ") { CanvasSettingsView() }
                 Button("視認性テストを表示（長押しで閉じる）") { model.showsTestPattern = true }
@@ -146,8 +154,10 @@ struct MapVoiceSettingsView: View {
         @Bindable var model = model
         Form {
             Section {
-                Picker("地図エンジン", selection: Binding(get: { model.settings.map.engine }, set: { e in if e.isAvailable { model.settings.map.engine = e } })) {
-                    ForEach(MapEngine.allCases, id: \.self) { Text($0.displayName).tag($0) }
+                NavigationLink {
+                    GoogleMapsSettingsView()
+                } label: {
+                    LabeledContent("地図エンジン", value: model.settings.map.engine == .googleMaps && GoogleMapsService.isReady(model.settings.googleMaps) ? "Google Maps" : "Apple マップ")
                 }
                 Toggle("3D表示", isOn: $model.settings.map.use3D)
                 Picker("ミニマップの向き", selection: $model.settings.map.orientation) {
@@ -160,7 +170,7 @@ struct MapVoiceSettingsView: View {
             } header: {
                 Text("地図")
             } footer: {
-                Text("Google Maps は APIキー・請求先の登録と従量課金が必要なため、現在は未対応です。公共交通は所要時間のみ表示し、経路は Apple マップのアプリで確認します。")
+                Text("Google Maps を使うには APIキー（従量課金・無料枠あり）が必要です。公共交通の乗り換え経路は Google Maps の APIキーがあれば HUD で案内でき、ない場合は所要時間のみ表示して Apple マップのアプリで確認します。")
             }
             Section("音声案内") {
                 Toggle("音声案内", isOn: $model.settings.voice.guidanceEnabled)
@@ -267,6 +277,9 @@ struct SensorsView: View {
                 LabeledContent("移動状態（推定）", value: model.movement.displayName)
                 LabeledContent("移動状態（モーション）", value: m.isActivityAvailable ? m.activity.displayName : "非対応")
                 if m.isShakeDetected { Text("シェイクを検出").foregroundStyle(.orange) }
+            }
+            Section {
+                NavigationLink("心拍計（Bluetooth）") { HeartRateSettingsView() }
             }
             Section {
                 if m.isHeadphoneMotionAvailable {

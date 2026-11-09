@@ -15,6 +15,8 @@ struct RootView: View {
             Tab("設定", systemImage: "gearshape", value: AppScreen.settings) { SettingsScreen() }
         }
         .tabViewStyle(.sidebarAdaptable)
+        .background { KeyboardShortcutsLayer() }
+        .onOpenURL { url in model.handleDeepLink(url) }
         .overlay(alignment: .top) { ToastView() }
         .overlay(alignment: .bottomTrailing) { FloatingMicButton().padding(.trailing, 20).padding(.bottom, 90) }
         .overlay {
@@ -54,6 +56,31 @@ struct ToastView: View {
 }
 
 /// どの画面からでも話しかけられるマイクボタン
+/// iPad のキーボードで操作する（見えないボタン）
+struct KeyboardShortcutsLayer: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        ZStack {
+            shortcut("u") {
+                if model.display.mode != .independent { model.isHUDPresented.toggle() }
+            }
+            shortcut("b") { model.background = model.background.toggled }
+            shortcut(.rightArrow) { model.cyclePreset(1) }
+            shortcut(.leftArrow) { model.cyclePreset(-1) }
+            shortcut("k") { model.speechInput.toggle() }
+            shortcut("r") { Task { await model.perform(.repeatGuidance) } }
+        }
+        .frame(width: 0, height: 0)
+        .opacity(0)
+        .accessibilityHidden(true)
+    }
+
+    private func shortcut(_ key: KeyEquivalent, action: @escaping () -> Void) -> some View {
+        Button("", action: action).keyboardShortcut(key, modifiers: .command)
+    }
+}
+
 struct FloatingMicButton: View {
     @Environment(AppModel.self) private var model
     var body: some View {

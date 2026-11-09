@@ -35,7 +35,10 @@ final class AppModel {
     var settingsPath: [SettingsRoute] = []
     /// 端末画面に HUD を全画面表示中（ミラー表示・単体利用時）
     var isHUDPresented = false {
-        didSet { updateIdleTimer() }
+        didSet {
+            updateIdleTimer()
+            if oldValue != isHUDPresented { refreshServices() }
+        }
     }
     var selectedPanelIDs: Set<UUID> = []
     var toast: String?
@@ -56,6 +59,10 @@ final class AppModel {
     var isDeviceScreenBlanked = false
     /// 視認性テスト（文字見本）を表示中
     var showsTestPattern = false
+    /// AI からの提案（ホーム画面にボタン付きで表示）
+    var suggestion: Suggestion?
+    /// 最後に読み取った標識
+    private(set) var lastSign: SignTextClassifier.SignReading?
 
     // MARK: - サービス
 
@@ -75,6 +82,8 @@ final class AppModel {
     let history = HistoryModel()
     let metrics = MetricsMonitor()
     let deviceTest = DeviceTestModel()
+    let heartRate = HeartRateService()
+    let syncFolder = SyncFolderService()
 
     @ObservationIgnored let store: JSONFileStore
     @ObservationIgnored private var demand: [WidgetRequirement: Int] = [:]
@@ -84,6 +93,18 @@ final class AppModel {
     @ObservationIgnored private var started = false
     @ObservationIgnored private var powerTimer: Timer?
     @ObservationIgnored private var lastBatteryWarning: Double = 1
+    @ObservationIgnored var advisor = ProactiveAdvisor(settings: ProactiveSettings())
+    @ObservationIgnored var featureTimer: Timer?
+    @ObservationIgnored var featureTick = 0
+    @ObservationIgnored var movingSince: Date?
+    @ObservationIgnored var lastMovingAt: Date?
+    @ObservationIgnored var lastSyncFingerprint: Int?
+    @ObservationIgnored var arrivedAt: Date?
+    @ObservationIgnored var savedScreenBrightness: CGFloat?
+    @ObservationIgnored var syncExportTask: Task<Void, Never>?
+    @ObservationIgnored var isApplyingSyncImport = false
+    /// 直前のコマンドが音声入力からか（利用統計用）
+    @ObservationIgnored var commandFromVoice = false
 
     // MARK: - 初期化
 
@@ -128,7 +149,7 @@ final class AppModel {
         deviceTest.sampleProvider = { [unowned self] in self.currentMetricSample() }
         speechInput.requireOnDevice = settings.assistant.requiresOnDeviceSpeech
         speechInput.onFinalText = { [unowned self] text in
-            Task { await self.handleUtterance(text) }
+            Task { await self.handleUtterance(text, viaVoice: true) }
         }
 
         location.onSample = { [unowned self] sample in self.handleLocation(sample) }
@@ -138,6 +159,7 @@ final class AppModel {
         }
         configureNavigationCallbacks()
         configureVisionCallbacks()
+        configureFeatures()
 
         display.makeHUDView = {
             AnyView(HUDRootView(surface: .external).environment(AppModel.shared))
@@ -224,7 +246,10 @@ final class AppModel {
         if old.camera.zoom != settings.camera.zoom || old.camera.exposureBias != settings.camera.exposureBias {
             camera.applySettings()
         }
-        if old.camera.prefersUltraWide != settings.camera.prefersUltraWide { camera.reconfigure() }
+        if old.camera.prefersUltraWide != settings.camera.prefersUltraWide || old.camera.useExternalCamera != settings.camera.useExternalCamera { camera.reconfigure() }
+        if old.proactive != settings.proactive { advisor.settings = settings.proactive }
+        if old.bluetooth.heartRateEnabled != settings.bluetooth.heartRateEnabled || old.display != settings.display { refreshServices() }
+        if old.display.dimsDeviceScreen != settings.display.dimsDeviceScreen { updateDeviceScreenDimming() }
         if old.showsMetricsOverlay != settings.showsMetricsOverlay {
             if settings.showsMetricsOverlay { metrics.start() } else if !deviceTest.isRecordingMetrics { metrics.stop() }
         }
@@ -248,6 +273,7 @@ final class AppModel {
         try? store.save(userThemes, as: "themes")
         try? store.save(presets, as: "presets")
         try? store.save(favorites, as: "favorites")
+        scheduleSyncExport()
     }
 
     // MARK: - サービスの起動・停止（必要なときだけ動かす）
@@ -268,7 +294,7 @@ final class AppModel {
         refreshServices()
     }
 
-    private func needs(_ r: WidgetRequirement) -> Bool { (demand[r] ?? 0) > 0 }
+    func needs(_ r: WidgetRequirement) -> Bool { (demand[r] ?? 0) > 0 }
 
     func refreshServices() {
         let needsLocation = needs(.location) || needs(.weather) || needs(.navigation) || navigation.isGuiding || history.isRecording
@@ -284,6 +310,13 @@ final class AppModel {
         if needs(.weather), let c = location.lastSample?.coordinate {
             weather.refreshIfNeeded(at: c, enabled: settings.privacy.weatherEnabled)
         }
+
+        // 心拍計（設定で ON にして、心拍ウィジェットか設定画面が表示されているとき）
+        if settings.bluetooth.heartRateEnabled && needs(.bluetooth) { heartRate.start() } else { heartRate.stop() }
+
+        // AirPods の頭の向き（HUD を空間に固定する設定のとき）
+        let wantsHead = settings.display.headLockWithAirPods && isHUDVisible
+        if wantsHead { motion.startHeadphoneTracking() } else { motion.stopHeadphoneTracking() }
     }
 
     private func applyPowerProfile() {
@@ -362,6 +395,8 @@ final class AppModel {
             self.deviceTest.record("ナビ開始: \(route.destinationName) \(HUDFormat.distance(route.distance))")
         }
         navigation.onArrive = { [unowned self] route in
+            self.arrivedAt = Date()
+            if !self.navigation.isDemo { self.history.recordNavigation(distance: route.distance, settings: self.settings.history) }
             self.history.stop(settings: self.settings.history)
             self.location.setBackgroundUpdates(false)
             if self.navigation.isDemo { self.location.stopSimulation() }
@@ -378,6 +413,7 @@ final class AppModel {
 
     private func configureVisionCallbacks() {
         vision.onHazard = { [unowned self] h in
+            self.history.logDetection(label: h.label, hazard: h.level, settings: self.settings.history)
             guard self.settings.detection.hazardAlertsEnabled, self.settings.detection.hasAcceptedDisclaimer else { return }
             self.alerts.post(HUDAlert(
                 category: .hazard,
@@ -391,6 +427,20 @@ final class AppModel {
         }
         vision.onNewDetections = { [unowned self] count in
             self.history.addDetections(count, settings: self.settings.history)
+        }
+        vision.onSign = { [unowned self] detection in
+            let sign = detection.reading
+            self.lastSign = sign
+            guard sign.isImportant, self.settings.detection.readsSigns, self.settings.detection.hasAcceptedDisclaimer else { return }
+            self.alerts.post(HUDAlert(
+                category: .hazard,
+                title: "標識：\(sign.kind)（実験）",
+                message: sign.text,
+                priority: .important,
+                duration: 4,
+                dedupeKey: "sign-\(sign.kind)",
+                spokenText: "標識、\(sign.kind)"
+            ))
         }
     }
 
@@ -406,6 +456,7 @@ final class AppModel {
             alerts.post(HUDAlert(category: .connection, title: "グラスとの接続が切れました", priority: .important, duration: 5))
             isDeviceScreenBlanked = false
         }
+        updateDeviceScreenDimming()
         deviceTest.record("出力モード: \(mode.displayName)")
         refreshServices()
         updateIdleTimer()
@@ -413,8 +464,13 @@ final class AppModel {
 
     func scenePhaseChanged(_ phase: ScenePhase) {
         isInBackground = phase == .background
-        if phase != .active { saveNow() }
-        if phase == .active { device.refresh(); camera.refreshAuthorization() }
+        if phase != .active { saveNow(); restoreDeviceScreenBrightness() }
+        if phase == .active {
+            device.refresh()
+            camera.refreshAuthorization()
+            Task { await importFromSyncFolderIfNewer() }
+            updateDeviceScreenDimming()
+        }
     }
 
     func completeOnboarding() {

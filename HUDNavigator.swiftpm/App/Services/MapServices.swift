@@ -12,6 +12,12 @@ struct PlaceResult: Identifiable, Hashable {
     var phone: String?
     var url: URL?
     var distance: Double?
+    /// Google の場合のみ：評価・件数・営業中か・営業時間
+    var rating: Double?
+    var ratingCount: Int?
+    var openNow: Bool?
+    var openingHours: [String] = []
+    var source: String = "Apple"
 
     static func == (lhs: PlaceResult, rhs: PlaceResult) -> Bool { lhs.id == rhs.id }
     func hash(into hasher: inout Hasher) { hasher.combine(id) }

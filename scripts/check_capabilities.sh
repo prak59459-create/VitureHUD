@@ -13,6 +13,9 @@ check NSLocationWhenInUseUsageDescription locationWhenInUse
 check NSMicrophoneUsageDescription microphone
 check NSSpeechRecognitionUsageDescription speechRecognition
 check NSMotionUsageDescription motion
+check NSBluetoothAlwaysUsageDescription bluetoothAlways
+# URL スキーム（ウィジェット・ショートカットから開く）は正式アプリのみ
+grep -q "hudnavigator" project.yml || { echo "::error::project.yml に URL スキームがありません"; status=1; }
 # Core は Foundation 以外を import しない（Linux でテストするため）
 if grep -rnE '^import (SwiftUI|UIKit|AVFoundation|CoreLocation|MapKit|Vision|CoreML|CoreMotion|Speech)' HUDNavigator.swiftpm/Core; then
   echo "::error::Core/ で Apple 専用フレームワークを import しています"; status=1

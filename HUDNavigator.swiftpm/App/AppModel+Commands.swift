@@ -5,6 +5,8 @@ import UIKit
 struct CommandOutcome {
     var message: String
     var speak: Bool = true
+    /// 会話画面に小さく表示する補足（AI が実行した操作など）
+    var detail: String? = nil
 }
 
 extension AppModel {
@@ -13,6 +15,8 @@ extension AppModel {
     @discardableResult
     func perform(_ command: AppCommand) async -> CommandOutcome {
         deviceTest.record("コマンド: \(command.summary)")
+        history.recordCommand(command.usageName, viaVoice: commandFromVoice, settings: settings.history)
+        commandFromVoice = false
         switch command {
         case .setBackground(let mode):
             background = mode
@@ -113,6 +117,63 @@ extension AppModel {
         case .autoArrange:
             autoArrange()
             return CommandOutcome(message: "パネルを画面の端に並べました。")
+        case .adjustHUDScale(let direction):
+            updateCanvas { $0.scale += direction == .up ? 0.05 : -0.05 }
+            return CommandOutcome(message: "HUD の大きさを\(HUDFormat.percent(layout.canvas.scale))にしました。")
+        case .moveHUD(let direction):
+            let step = 0.03
+            updateCanvas { c in
+                switch direction {
+                case .up: c.offsetY -= step
+                case .down: c.offsetY += step
+                case .left: c.offsetX -= step
+                case .right: c.offsetX += step
+                }
+            }
+            return CommandOutcome(message: "HUD を\(direction.displayName)に動かしました。")
+        case .adjustTextSize(let direction):
+            updateCanvas { $0.textScale += direction == .up ? 0.1 : -0.1 }
+            return CommandOutcome(message: "文字の大きさを\(HUDFormat.percent(layout.canvas.textScale))にしました。")
+        case .adjustBrightness(let direction):
+            settings.display.brightness = (settings.display.brightness + (direction == .up ? 0.1 : -0.1)).clamped(to: 0.2...1)
+            return CommandOutcome(message: "HUD の明るさを\(HUDFormat.percent(settings.display.brightness))にしました。")
+        case .setNightDim(let on):
+            settings.display.nightDimEnabled = on
+            return CommandOutcome(message: on ? "夜間は HUD を自動で暗くします。" : "夜間の自動減光をオフにしました。")
+        case .setStereo3D(let on):
+            settings.display.stereo3D = on
+            return CommandOutcome(message: on ? "3D（左右分割）表示にしました。グラスを 3D モードにしてください。" : "3D 表示をオフにしました。")
+        case .cyclePreset(let offset):
+            cyclePreset(offset >= 0 ? 1 : -1)
+            return CommandOutcome(message: "「\(activePreset.name)」にしました。")
+        case .nextTheme:
+            let themes = allThemes
+            let current = themes.firstIndex { themeRef($0) == activePreset.themeRef } ?? 0
+            let next = themes[(current + 1) % themes.count]
+            applyTheme(themeRef(next))
+            return CommandOutcome(message: "テーマを「\(next.name)」にしました。")
+        case .connectHeartRate:
+            settings.bluetooth.heartRateEnabled = true
+            if !layout.contains(widget: .heartRate) { showWidget(.heartRate) }
+            heartRate.start()
+            if settings.bluetooth.rememberedDeviceID == nil { heartRate.scan() }
+            return CommandOutcome(message: "心拍計を探します。心拍計の電源を入れてください。")
+        case .syncNow:
+            return CommandOutcome(message: await syncNow())
+        case .setRecording(let on):
+            if on {
+                guard settings.history.enabled else {
+                    return CommandOutcome(message: "移動履歴の保存がオフです。設定 → 移動履歴 で有効にしてください。")
+                }
+                if history.isRecording { return CommandOutcome(message: "すでに記録中です。") }
+                history.start(settings: settings.history)
+                refreshServices()
+                return CommandOutcome(message: "移動の記録を開始しました。")
+            }
+            guard history.isRecording else { return CommandOutcome(message: "記録はしていません。") }
+            history.stop(settings: settings.history)
+            refreshServices()
+            return CommandOutcome(message: "移動の記録を終了して保存しました。")
         case .cancel:
             return CommandOutcome(message: "キャンセルしました。", speak: false)
         case .ask(let question):
@@ -121,7 +182,7 @@ extension AppModel {
     }
 
     /// 音声入力・テキスト入力をコマンドに変換して実行する
-    func handleUtterance(_ text: String) async {
+    func handleUtterance(_ text: String, viaVoice: Bool = false) async {
         assistant.append(ChatMessage(role: .user, text: text))
         var userPresets: [String: String] = [:]
         for p in presets where !p.isBuiltIn { userPresets[p.name] = p.id.uuidString }
@@ -130,10 +191,11 @@ extension AppModel {
         let parser = IntentParser(userPresetNames: userPresets, userThemeNames: userThemeNames)
         let command = parser.parse(text)
         assistant.setThinking(true)
+        commandFromVoice = viaVoice
         let outcome = await perform(command)
         assistant.setThinking(false)
         var reply = ChatMessage(role: .assistant, text: outcome.message)
-        if case .ask = command {} else { reply.command = command.summary }
+        if case .ask = command { reply.command = outcome.detail } else { reply.command = command.summary }
         assistant.append(reply)
         if outcome.speak && settings.assistant.speaksResponses {
             speech.speak(outcome.message, priority: .normal, force: true)
@@ -171,8 +233,13 @@ extension AppModel {
         if let t = c.remainingTime { lines.append("到着まで: \(HUDFormat.duration(t))") }
         if s.sharesApproximateLocation, let place = c.placeName { lines.append("現在地付近: \(place)") }
         if let w = weather.snapshot { lines.append("天気: \(w.conditionText) \(w.temperature.map { "\(Int($0.rounded()))度" } ?? "")") }
+        lines.append("表示中のプリセット: \(activePreset.name)・背景: \(background.displayName)")
+        if let bpm = heartRate.bpm, heartRate.isFresh { lines.append("心拍数: \(bpm)") }
+        if settings.history.recordsUsage { lines.append("利用状況:\n" + history.usage.summaryText) }
         do {
-            let answer = try await CloudAssistant.ask(question, context: lines.joined(separator: "\n"), settings: s, network: network)
+            let extra = s.allowsAICommands ? AICommandCodec.catalog : ""
+            let answer = try await CloudAssistant.ask(question, context: lines.joined(separator: "\n"), settings: s, network: network, extraSystem: extra)
+            if s.allowsAICommands { return await runAIPlan(answer) }
             return CommandOutcome(message: answer)
         } catch {
             return CommandOutcome(message: error.localizedDescription)
@@ -195,9 +262,8 @@ extension AppModel {
     }
 
     private func navigate(to query: String) async -> CommandOutcome {
-        let origin = location.lastSample?.coordinate
         do {
-            let results = try await MapSearch.search(query, near: origin)
+            let results = try await searchPlaces(query)
             guard let place = results.first else { return CommandOutcome(message: "「\(query)」が見つかりませんでした。") }
             await navigation.plan(to: place, transport: settings.map.defaultTransport)
             if navigation.phase == .choosing {
@@ -217,7 +283,7 @@ extension AppModel {
             return CommandOutcome(message: "現在地を取得できていません。少し待ってからもう一度お試しください。")
         }
         do {
-            let results = try await MapSearch.nearby(category, near: origin)
+            let results = try await nearbyPlaces(category, near: origin)
             nearbyResults = results
             nearbyCategory = category
             selectedTab = .navigation
@@ -408,7 +474,9 @@ extension AppModel {
             themes: userThemes,
             presets: presets,
             favorites: favorites,
-            trips: includeHistory ? history.trips : nil
+            trips: includeHistory ? history.trips : nil,
+            visits: includeHistory ? history.visits : nil,
+            deviceID: settings.sync.deviceID
         )
         return writeTemp(name: "HUDNavigator-設定", data: try? bundle.encoded())
     }
@@ -442,20 +510,8 @@ extension AppModel {
         }
         do {
             let bundle = try SettingsBundle.decode(data)
-            if let s = bundle.settings {
-                var merged = s
-                // 端末ごとの状態は引き継がない
-                merged.hasCompletedOnboarding = settings.hasCompletedOnboarding
-                merged.detection.hasAcceptedDisclaimer = settings.detection.hasAcceptedDisclaimer
-                merged.assistant.cloudConsentGiven = settings.assistant.cloudConsentGiven
-                settings = merged
-            }
-            userThemes = SettingsBundle.merged(userThemes, incoming: bundle.themes, strategy: strategy, isBuiltIn: { $0.isBuiltIn })
-            presets = SettingsBundle.merged(presets, incoming: bundle.presets, strategy: strategy, isBuiltIn: { $0.isBuiltIn })
-            favorites = SettingsBundle.merged(favorites, incoming: bundle.favorites, strategy: strategy, isBuiltIn: { _ in false })
-            if let trips = bundle.trips, settings.history.enabled { history.replace(with: trips) }
-            if !presets.contains(where: { $0.id == activePresetID }), let first = presets.first { activePresetID = first.id }
-            return "「\(bundle.deviceName)」の設定を読み込みました（テーマ\(bundle.themes.count)件・プリセット\(bundle.presets.count)件・お気に入り\(bundle.favorites.count)件）。"
+            // 端末ごとの状態（同意・Bluetooth・同期の設定）は引き継がない
+            return applyBundle(bundle, strategy: strategy)
         } catch {
             return error.localizedDescription
         }

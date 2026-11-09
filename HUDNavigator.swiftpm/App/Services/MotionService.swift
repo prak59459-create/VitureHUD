@@ -23,6 +23,22 @@ final class MotionService {
     private(set) var isActivityAvailable = CMMotionActivityManager.isActivityAvailable()
     private(set) var headphoneAttitude: Attitude?
     private(set) var isHeadphoneTracking = false
+    /// 頭の向きの基準（HUD を空間に固定するとき、この向きを正面とする）
+    private(set) var headReference: Attitude?
+
+    /// 基準からの頭の向きのずれ（度）。左右は -180〜180 に正規化。
+    var headOffset: (yaw: Double, pitch: Double)? {
+        guard let a = headphoneAttitude, let r = headReference else { return nil }
+        var yaw = a.yaw - r.yaw
+        if yaw > 180 { yaw -= 360 }
+        if yaw < -180 { yaw += 360 }
+        return (yaw, a.pitch - r.pitch)
+    }
+
+    /// 今の頭の向きを正面にする
+    func recenterHead() {
+        headReference = headphoneAttitude
+    }
     private(set) var isShakeDetected = false
 
     @ObservationIgnored private let manager = CMMotionManager()
@@ -100,7 +116,10 @@ final class MotionService {
                 roll: motion.attitude.roll * 180 / .pi,
                 yaw: motion.attitude.yaw * 180 / .pi
             )
-            MainActor.assumeIsolated { self?.headphoneAttitude = att }
+            MainActor.assumeIsolated {
+                self?.headphoneAttitude = att
+                if self?.headReference == nil { self?.headReference = att }
+            }
         }
     }
 
@@ -109,6 +128,7 @@ final class MotionService {
         headphoneManager.stopDeviceMotionUpdates()
         isHeadphoneTracking = false
         headphoneAttitude = nil
+        headReference = nil
     }
 
     private func handle(attitude att: Attitude, acceleration: Double, rotation: Double) {

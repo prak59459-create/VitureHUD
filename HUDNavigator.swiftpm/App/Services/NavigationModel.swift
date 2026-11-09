@@ -37,6 +37,10 @@ final class NavigationModel {
     @ObservationIgnored var onStop: (() -> Void)?
     @ObservationIgnored var voiceSettings: (() -> VoiceSettings)?
     @ObservationIgnored var currentLocation: (() -> GeoCoordinate?)?
+    /// ルート検索（AppModel が Google / MapKit を選んで設定する）
+    @ObservationIgnored var routeProvider: ((GeoCoordinate?, PlaceResult, TransportMode) async throws -> [NavRoute])?
+    /// どの地図サービスで検索したか（画面表示用）
+    private(set) var routeSource: String = "Apple"
 
     var isGuiding: Bool { phase == .guiding }
 
@@ -59,7 +63,7 @@ final class NavigationModel {
         phase = .planning
         message = nil
         do {
-            let result = try await RoutePlanner.routes(from: currentLocation?(), to: place, transport: transport)
+            let result = try await findRoutes(from: currentLocation?(), to: place, transport: transport)
             routes = result
             selectedRouteID = result.first?.id
             phase = .choosing
@@ -77,6 +81,15 @@ final class NavigationModel {
         phase = .idle
         message = nil
     }
+
+    private func findRoutes(from origin: GeoCoordinate?, to place: PlaceResult, transport: TransportMode) async throws -> [NavRoute] {
+        if let provider = routeProvider {
+            return try await provider(origin, place, transport)
+        }
+        return try await RoutePlanner.routes(from: origin, to: place, transport: transport)
+    }
+
+    func setRouteSource(_ name: String) { routeSource = name }
 
     // MARK: - 案内
 
@@ -150,7 +163,7 @@ final class NavigationModel {
         engine?.resetOffRoute()
         Task {
             do {
-                let result = try await RoutePlanner.routes(from: coordinate, to: destination, transport: transport)
+                let result = try await findRoutes(from: coordinate, to: destination, transport: transport)
                 guard let best = result.first, phase == .guiding else { return }
                 activeRoute = best
                 routes = result

@@ -28,6 +28,10 @@ targets:
       - path: HUDNavigator.swiftpm/App
       # アプリアイコン（正式アプリのみ。Swift Playgrounds 版はプレースホルダーのアイコン）
       - path: Resources/Assets.xcassets
+    dependencies:
+      # ホーム画面ウィジェット（build_ipa.sh が「ウィジェットなし」の IPA も作る）
+      - target: HUDNavigatorWidgets
+        embed: true
     info:
       path: build/generated/Info.plist
       properties:
@@ -51,6 +55,11 @@ targets:
         UIBackgroundModes:
           - audio
           - location
+          - bluetooth-central
+        CFBundleURLTypes:
+          - CFBundleURLName: io.github.prak59459.hudnavigator
+            CFBundleURLSchemes:
+              - hudnavigator
         UIFileSharingEnabled: true
         LSSupportsOpeningDocumentsInPlace: true
         ITSAppUsesNonExemptEncryption: false
@@ -59,6 +68,7 @@ targets:
         NSMicrophoneUsageDescription: 音声コマンド（AIアシスタント）で話しかけるために使います。
         NSSpeechRecognitionUsageDescription: 話した言葉を文字にして、アプリの操作に変換するために使います。
         NSMotionUsageDescription: 歩行・停止などの移動状態の推定と、センサー情報の表示に使います。
+        NSBluetoothAlwaysUsageDescription: Bluetooth の心拍計から心拍数を受け取り、HUD に表示するために使います。
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: io.github.prak59459.hudnavigator
@@ -70,6 +80,31 @@ targets:
         GENERATE_INFOPLIST_FILE: "NO"
         ASSETCATALOG_COMPILER_GENERATE_ASSET_SYMBOLS: "NO"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+
+  HUDNavigatorWidgets:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "18.0"
+    sources:
+      - path: Extensions/Widgets
+    info:
+      path: build/generated/Widgets-Info.plist
+      properties:
+        CFBundleDisplayName: HUD Navigator
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        CFBundleDevelopmentRegion: ja
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.prak59459.hudnavigator.widgets
+        PRODUCT_NAME: HUDNavigatorWidgets
+        TARGETED_DEVICE_FAMILY: "1,2"
+        GENERATE_INFOPLIST_FILE: "NO"
+        SKIP_INSTALL: "YES"
+        APPLICATION_EXTENSION_API_ONLY: "YES"
+        ENABLE_PREVIEWS: "NO"
 
   HUDNavigatorTests:
     type: bundle.unit-test

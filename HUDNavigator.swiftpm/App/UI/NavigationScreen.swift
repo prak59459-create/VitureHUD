@@ -108,7 +108,7 @@ struct NavigationScreen: View {
         defer { isSearching = false }
         searchFocused = false
         do {
-            searchResults = try await MapSearch.search(q, near: model.location.lastSample?.coordinate)
+            searchResults = try await model.searchPlaces(q)
             searchMessage = searchResults.isEmpty ? "見つかりませんでした" : nil
             if let first = searchResults.first { position = .region(MKCoordinateRegion(center: first.coordinate.clCoordinate, latitudinalMeters: 3000, longitudinalMeters: 3000)) }
         } catch {
@@ -346,6 +346,21 @@ struct PlaceList: View {
                                 Text(place.name).foregroundStyle(.primary)
                                 Text([place.category, place.address.isEmpty ? nil : place.address].compactMap { $0 }.joined(separator: "・"))
                                     .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                                if place.rating != nil || place.openNow != nil {
+                                    HStack(spacing: 6) {
+                                        if let r = place.rating {
+                                            Label(String(format: "%.1f", r) + (place.ratingCount.map { "（\($0)件）" } ?? ""), systemImage: "star.fill")
+                                                .foregroundStyle(.orange)
+                                        }
+                                        if let open = place.openNow {
+                                            Text(open ? "営業中" : "営業時間外").foregroundStyle(open ? Color.green : Color.secondary)
+                                        }
+                                        if let today = todayHours(place) {
+                                            Text(today).foregroundStyle(.secondary).lineLimit(1)
+                                        }
+                                    }
+                                    .font(.caption2)
+                                }
                             }
                             Spacer()
                             if let d = place.distance { Text(HUDFormat.distance(d)).font(.caption).foregroundStyle(.secondary) }
@@ -354,13 +369,25 @@ struct PlaceList: View {
                     }
                     Divider()
                 }
-                Text("営業時間・評価は Apple マップでは取得できないため表示していません。")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .padding(.top, 4)
+                if places.contains(where: { $0.source == "Apple" }) {
+                    Text("営業時間・評価は Apple マップでは取得できません（Google Maps の APIキーを設定すると表示します）。")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .padding(.top, 4)
+                } else if !places.isEmpty {
+                    Text("検索：Google Maps").font(.caption2).foregroundStyle(.secondary).padding(.top, 4)
+                }
             }
         }
         .frame(maxHeight: 240)
+    }
+
+    /// 今日の営業時間（Google の weekdayDescriptions は月曜始まり）
+    private func todayHours(_ place: PlaceResult) -> String? {
+        guard place.openingHours.count == 7 else { return nil }
+        let weekday = Calendar(identifier: .gregorian).component(.weekday, from: Date()) // 1=日曜
+        let index = (weekday + 5) % 7
+        return place.openingHours[index]
     }
 }
 
@@ -386,6 +413,10 @@ struct RouteChoicePanel: View {
                     ForEach(TransportMode.allCases, id: \.self) { Text($0.displayName).tag($0) }
                 }
                 .pickerStyle(.segmented)
+                if !nav.routes.isEmpty {
+                    Text("経路：\(nav.routeSource == "Google" ? "Google Maps" : "Apple マップ")")
+                        .font(.caption2).foregroundStyle(.secondary)
+                }
             }
             ForEach(nav.routes) { route in
                 let selected = route.id == (nav.selectedRouteID ?? nav.routes.first?.id)

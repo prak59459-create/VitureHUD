@@ -32,6 +32,10 @@ struct WidgetContentView: View {
         case .assistant: AssistantWidget(ctx: ctx)
         case .detections: DetectionsWidget(ctx: ctx)
         case .customText: CustomTextWidget(ctx: ctx)
+        case .heartRate: HeartRateWidget(ctx: ctx)
+        case .horizon: HorizonWidget(ctx: ctx)
+        case .hourlyForecast: HourlyForecastWidget(ctx: ctx)
+        case .nearbyPlaces: NearbyPlacesWidget(ctx: ctx)
         }
     }
 }
@@ -519,13 +523,170 @@ struct DetectionsWidget: View {
 }
 
 struct CustomTextWidget: View {
+    @Environment(AppModel.self) private var model
     let ctx: WidgetContext
     var body: some View {
-        Text(ctx.config.text.isEmpty ? "テキスト" : ctx.config.text)
+        let template = ctx.config.text.isEmpty ? "テキスト" : ctx.config.text
+        if TemplateRenderer.usesTokens(template) {
+            // {time} などを含む場合は 1 秒ごとに更新
+            TimelineView(.periodic(from: .now, by: 1)) { context in
+                label(TemplateRenderer.render(template, values: model.templateValues(now: context.date)))
+            }
+        } else {
+            label(template)
+        }
+    }
+
+    private func label(_ text: String) -> some View {
+        Text(text)
             .font(ctx.typography.primary)
             .foregroundStyle(ctx.text)
             .lineLimit(2)
             .minimumScaleFactor(0.3)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+    }
+}
+
+/// 心拍数（Bluetooth の心拍計）
+struct HeartRateWidget: View {
+    @Environment(AppModel.self) private var model
+    let ctx: WidgetContext
+    var body: some View {
+        let hr = model.heartRate
+        if let bpm = hr.bpm, hr.isFresh {
+            let zone = HeartRateParser.zone(bpm: bpm)
+            MetricView(
+                ctx: ctx,
+                icon: ctx.config.compact ? nil : "heart.fill",
+                value: "\(bpm)",
+                unit: "bpm",
+                caption: "ゾーン\(zone.index)・\(zone.name)",
+                valueColor: zone.index >= 5 ? ctx.danger : zone.index >= 4 ? ctx.warning : nil
+            )
+        } else {
+            MetricView(ctx: ctx, icon: "heart", value: "--", unit: "bpm", caption: status(hr))
+        }
+    }
+
+    private func status(_ hr: HeartRateService) -> String {
+        if !model.settings.bluetooth.heartRateEnabled { return "設定で心拍計を ON" }
+        return hr.state.displayName
+    }
+}
+
+/// 水平器（端末の傾き）
+struct HorizonWidget: View {
+    @Environment(AppModel.self) private var model
+    let ctx: WidgetContext
+    var body: some View {
+        let a = model.motion.attitude
+        let roll = a?.roll ?? 0
+        let pitch = a?.pitch ?? 0
+        GeometryReader { geo in
+            let w = geo.size.width
+            let h = geo.size.height
+            let level = abs(roll) < 2 && abs(pitch) < 2
+            ZStack {
+                // 固定の目盛り
+                Path { p in
+                    p.move(to: CGPoint(x: w * 0.1, y: h / 2))
+                    p.addLine(to: CGPoint(x: w * 0.35, y: h / 2))
+                    p.move(to: CGPoint(x: w * 0.65, y: h / 2))
+                    p.addLine(to: CGPoint(x: w * 0.9, y: h / 2))
+                }
+                .stroke(ctx.secondary, lineWidth: 2)
+                // 傾きに合わせて回る水平線
+                Capsule()
+                    .fill(level ? ctx.accent : ctx.text)
+                    .frame(width: w * 0.7, height: max(3, h * 0.05))
+                    .rotationEffect(.degrees(-roll))
+                    .offset(y: CGFloat(pitch / 90) * h / 2)
+                Text(a == nil ? "--" : String(format: "%+.0f°", roll))
+                    .font(ctx.typography.font(0.2, weight: .semibold))
+                    .foregroundStyle(ctx.secondary)
+                    .monospacedDigit()
+                    .position(x: w / 2, y: h * 0.88)
+            }
+        }
+        .animation(.linear(duration: 0.1), value: roll)
+    }
+}
+
+/// 数時間先までの天気
+struct HourlyForecastWidget: View {
+    @Environment(AppModel.self) private var model
+    let ctx: WidgetContext
+    var body: some View {
+        let now = Date()
+        let hours = (model.weather.snapshot?.hourly ?? []).filter { $0.time > now.addingTimeInterval(-1800) }.prefix(ctx.config.compact ? 4 : 6)
+        let t = ctx.typography
+        if hours.isEmpty {
+            MetricView(ctx: ctx, icon: "clock.badge.questionmark", value: "--", caption: "1時間ごとの予報")
+        } else {
+            HStack(spacing: t.size(0.06)) {
+                ForEach(Array(hours), id: \.time) { h in
+                    VStack(spacing: 1) {
+                        Text(Calendar.current.component(.hour, from: h.time).description + "時")
+                            .font(t.font(0.15, weight: .medium))
+                            .foregroundStyle(ctx.secondary)
+                        Image(systemName: h.symbolName)
+                            .font(.system(size: t.size(0.24)))
+                            .foregroundStyle(ctx.accent)
+                        Text(h.temperature.map { "\(Int($0.rounded()))°" } ?? "--")
+                            .font(t.font(0.18, weight: .semibold))
+                            .foregroundStyle(ctx.text)
+                        Text(h.precipitationProbability.map { "\(Int($0))%" } ?? "")
+                            .font(t.font(0.13, weight: .medium))
+                            .foregroundStyle((h.precipitationProbability ?? 0) >= 50 ? ctx.warning : ctx.secondary)
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+            }
+            .lineLimit(1)
+            .minimumScaleFactor(0.5)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+}
+
+/// 近くの施設（直近に検索した結果）
+struct NearbyPlacesWidget: View {
+    @Environment(AppModel.self) private var model
+    let ctx: WidgetContext
+    var body: some View {
+        let t = ctx.typography
+        let places = Array(model.nearbyResults.prefix(3))
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 4) {
+                Image(systemName: model.nearbyCategory?.systemImage ?? "mappin.and.ellipse")
+                    .foregroundStyle(ctx.accent)
+                Text(model.nearbyCategory.map { "近くの\($0.displayName)" } ?? "近くの施設")
+                    .foregroundStyle(ctx.secondary)
+            }
+            .font(t.font(0.15, weight: .semibold))
+            if places.isEmpty {
+                Text("「近くのカフェ」などと話しかけてください")
+                    .font(t.font(0.14, weight: .medium))
+                    .foregroundStyle(ctx.secondary)
+            }
+            ForEach(places) { p in
+                HStack {
+                    Text(p.name).foregroundStyle(ctx.text)
+                    Spacer(minLength: 4)
+                    if let d = currentDistance(p) {
+                        Text(HUDFormat.distance(d)).foregroundStyle(ctx.secondary).monospacedDigit()
+                    }
+                }
+                .font(t.font(0.17, weight: .medium))
+            }
+        }
+        .lineLimit(1)
+        .minimumScaleFactor(0.5)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    private func currentDistance(_ p: PlaceResult) -> Double? {
+        if let here = model.location.lastSample?.coordinate { return Geo.distance(here, p.coordinate) }
+        return p.distance
     }
 }

@@ -38,7 +38,8 @@ let package = Package(
                 .locationWhenInUse(purposeString: "現在地の表示、ナビゲーション、速度、天気の取得に使います。位置情報は端末内で処理します。"),
                 .microphone(purposeString: "音声コマンド（AIアシスタント）で話しかけるために使います。"),
                 .speechRecognition(purposeString: "話した言葉を文字にして、アプリの操作に変換するために使います。"),
-                .motion(purposeString: "歩行・停止などの移動状態の推定と、センサー情報の表示に使います。")
+                .motion(purposeString: "歩行・停止などの移動状態の推定と、センサー情報の表示に使います。"),
+                .bluetoothAlways(purposeString: "Bluetooth の心拍計から心拍数を受け取り、HUD に表示するために使います。")
             ]
         )
     ],

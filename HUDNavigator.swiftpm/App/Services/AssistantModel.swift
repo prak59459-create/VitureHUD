@@ -40,31 +40,32 @@ enum CloudAssistant {
     分からないことや確認できない情報（営業時間・混雑など）は推測で断定せず、確認方法を伝えてください。
     """
 
-    static func ask(_ question: String, context: String, settings: AssistantSettings, network: NetworkLog) async throws -> String {
+    static func ask(_ question: String, context: String, settings: AssistantSettings, network: NetworkLog, extraSystem: String = "") async throws -> String {
         guard let key = KeychainStore.load(account: keyAccount(settings.provider)), !key.isEmpty else { throw CloudError.missingKey }
         let userText = context.isEmpty ? question : "状況:\n\(context)\n\n質問: \(question)"
+        let system = extraSystem.isEmpty ? systemPrompt : systemPrompt + "\n\n" + extraSystem
         switch settings.provider {
         case .localOnly:
             throw CloudError.missingKey
         case .anthropic:
-            return try await askAnthropic(userText, key: key, settings: settings, network: network)
+            return try await askAnthropic(userText, key: key, settings: settings, network: network, system: system)
         case .gemini:
-            return try await askGemini(userText, key: key, settings: settings, network: network)
+            return try await askGemini(userText, key: key, settings: settings, network: network, system: system)
         case .openAICompatible:
-            return try await askOpenAICompatible(userText, key: key, settings: settings, network: network)
+            return try await askOpenAICompatible(userText, key: key, settings: settings, network: network, system: system)
         }
     }
 
     // MARK: Anthropic Messages API
 
-    static func askAnthropic(_ text: String, key: String, settings: AssistantSettings, network: NetworkLog) async throws -> String {
+    static func askAnthropic(_ text: String, key: String, settings: AssistantSettings, network: NetworkLog, system: String = CloudAssistant.systemPrompt) async throws -> String {
         let base = settings.effectiveBaseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         guard let url = URL(string: base + "/v1/messages") else { throw URLError(.badURL) }
         let model = settings.effectiveModel
         var body: [String: Any] = [
             "model": model,
             "max_tokens": 16000,
-            "system": systemPrompt,
+            "system": system,
             "messages": [["role": "user", "content": text]],
             // 短い会話なので推論量は少なめ
             "output_config": ["effort": "low"],
@@ -93,11 +94,11 @@ enum CloudAssistant {
 
     // MARK: Google Gemini
 
-    static func askGemini(_ text: String, key: String, settings: AssistantSettings, network: NetworkLog) async throws -> String {
+    static func askGemini(_ text: String, key: String, settings: AssistantSettings, network: NetworkLog, system: String = CloudAssistant.systemPrompt) async throws -> String {
         let base = settings.effectiveBaseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         guard let url = URL(string: "\(base)/v1beta/models/\(settings.effectiveModel):generateContent") else { throw URLError(.badURL) }
         let body: [String: Any] = [
-            "systemInstruction": ["parts": [["text": systemPrompt]]],
+            "systemInstruction": ["parts": [["text": system]]],
             "contents": [["role": "user", "parts": [["text": text]]]],
             "generationConfig": ["maxOutputTokens": 1024],
         ]
@@ -119,12 +120,12 @@ enum CloudAssistant {
 
     // MARK: OpenAI 互換
 
-    static func askOpenAICompatible(_ text: String, key: String, settings: AssistantSettings, network: NetworkLog) async throws -> String {
+    static func askOpenAICompatible(_ text: String, key: String, settings: AssistantSettings, network: NetworkLog, system: String = CloudAssistant.systemPrompt) async throws -> String {
         let base = settings.effectiveBaseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         guard let url = URL(string: base + "/chat/completions") else { throw URLError(.badURL) }
         let body: [String: Any] = [
             "model": settings.effectiveModel,
-            "messages": [["role": "system", "content": systemPrompt], ["role": "user", "content": text]],
+            "messages": [["role": "system", "content": system], ["role": "user", "content": text]],
             "max_tokens": 1024,
         ]
         var request = URLRequest(url: url, timeoutInterval: 60)

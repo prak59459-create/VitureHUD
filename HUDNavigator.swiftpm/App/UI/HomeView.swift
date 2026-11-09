@@ -7,6 +7,7 @@ struct HomeView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 14) {
+                    if model.suggestion != nil { SuggestionCard() }
                     DisplayStatusCard()
                     QuickActionsCard()
                     PresetPickerCard()
@@ -20,6 +21,28 @@ struct HomeView: View {
                 .padding()
             }
             .navigationTitle("HUD Navigator")
+        }
+    }
+}
+
+/// AI からの提案（ボタンで実行）
+struct SuggestionCard: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        if let s = model.suggestion {
+            Card(title: "提案", systemImage: "lightbulb") {
+                Text(s.title).font(.headline)
+                Text(s.message).font(.subheadline).foregroundStyle(.secondary)
+                HStack {
+                    if let action = s.action {
+                        Button(action.summary) { model.acceptSuggestion() }
+                            .buttonStyle(.borderedProminent)
+                    }
+                    Button("閉じる") { model.suggestion = nil }
+                        .buttonStyle(.bordered)
+                }
+            }
         }
     }
 }
