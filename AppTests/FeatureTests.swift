@@ -41,6 +41,15 @@ final class FeatureTests: XCTestCase {
         model.settings.display = HUDDisplaySettings()
     }
 
+    func testStereoLayoutDetection() {
+        let hd = CGSize(width: 1920, height: 1080)
+        let wide = CGSize(width: 3840, height: 1080)
+        XCTAssertEqual(HUDRootView.stereoLayout(surface: .external, size: hd, stereoSetting: false), .none)
+        XCTAssertEqual(HUDRootView.stereoLayout(surface: .external, size: hd, stereoSetting: true), .halfSideBySide)
+        XCTAssertEqual(HUDRootView.stereoLayout(surface: .external, size: wide, stereoSetting: false), .fullSideBySide, "3D モードの信号は自動")
+        XCTAssertEqual(HUDRootView.stereoLayout(surface: .thumbnail, size: wide, stereoSetting: true), .none, "端末側の表示は 2D")
+    }
+
     func testCyclePresetAndNextTheme() async {
         let first = model.activePresetID
         await model.perform(.cyclePreset(1))

@@ -69,6 +69,13 @@ App プロジェクトは **`.swiftpm`（Swift Package 形式）** になる。`
 - リフレッシュレート、3DoF表示の有無、iOSで出力される解像度（1080p/3D SBSなど）、電子調光の段階数は **【未確認】** → Phase 0 で実機確認
 - **iOS アプリから IMU（頭部の向き）を読む公開SDK は確認できない**【未確認】。SpaceWalker の機能を他アプリから使える保証もない。
 
+### 3-1-2. VITURE 公式 SDK の調査（2026-11-09、[viture.jp/developer](https://www.viture.jp/developer)・[viture.com/developer](https://www.viture.com/developer)）
+- **XR Glasses SDK（C ライブラリ）**：Linux・macOS・Windows・Android・ブラウザ（WebHID、Chrome 系のみ）。**iOS / iPadOS 版はない**【確認済】
+  - USB HID（ベンダー ID 0x35CA）で通信し、頭の向き（roll/pitch/yaw・クォータニオン、60〜1000Hz）、明るさ、電子調光、表示モード（3D は **3840×1080 60Hz** の左右分割）を扱う
+- **Unity SDK v0.7.0**：Android（VITURE Pro Neckband 向け APK）。iOS は録画用のコンパニオンアプリのみ
+- **iOS で使えない理由**：iPhone / iPad の一般のアプリは USB HID 機器を直接開けない（hidapi・IOKit は非公開。iPadOS の DriverKit は M1 以降の iPad と Apple の特別な許可が必要で、A16 iPad・iPhone・AltStore の署名では使えない）。Safari・iOS 版 Chrome は WebHID 非対応
+- **このアプリでの扱い**：頭の向きは AirPods（CMHeadphoneMotionManager）で代用。明るさはアプリ側の描画で調整（グラス本体の明るさ・電子調光は本体のボタンで操作）。3D は、端末が 3840×1080 で出力した場合は自動で左右に描き分け、1920×1080 の場合は設定で左右に半分ずつ描く
+
 ### 3-2. iOS 側の外部ディスプレイの動作
 | 方式 | 内容 | 状況 |
 |------|------|------|

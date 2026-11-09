@@ -121,6 +121,9 @@ final class SnapshotTests: XCTestCase {
         model.settings.display.stereo3D = true
         model.settings.display.stereoDepth = 20
         try render(HUDRootView(surface: .external), model: model, size: glasses, name: "stereo-sbs-minimal")
+        // グラスが 3D モード（3840×1080）でつながった場合は、設定に関係なく左右に描き分ける
+        model.settings.display.stereo3D = false
+        try render(HUDRootView(surface: .external), model: model, size: CGSize(width: 3840, height: 1080), name: "stereo-full-sbs-3840x1080")
         model.settings.display.stereo3D = false
         model.settings.display.brightness = 0.5
         try render(HUDRootView(surface: .external), model: model, size: glasses, name: "brightness-50-minimal")

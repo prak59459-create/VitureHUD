@@ -6,22 +6,46 @@ struct HUDRootView: View {
     @Environment(AppModel.self) private var model
     let surface: HUDSurface
 
-    /// グラスの 3D モード（左右分割）で表示するか
-    private var isStereo: Bool { surface == .external && model.settings.display.stereo3D }
+    enum StereoLayout: Equatable {
+        /// ふつうの表示（2D）
+        case none
+        /// 16:9 の信号を左右に分ける（グラスが横に2倍に引き伸ばす）。設定で 3D を ON にしたとき
+        case halfSideBySide
+        /// 32:9（3840×1080 など）の信号：左右それぞれに 16:9 をそのまま描く。
+        /// VITURE は 3D モードで 3840×1080（左右合計）を受け取るため、この大きさなら自動でこちらにする
+        case fullSideBySide
+    }
+
+    static func stereoLayout(surface: HUDSurface, size: CGSize, stereoSetting: Bool) -> StereoLayout {
+        guard surface == .external, size.width > 0, size.height > 0 else { return .none }
+        if size.width / size.height >= 3 { return .fullSideBySide }
+        return stereoSetting ? .halfSideBySide : .none
+    }
 
     var body: some View {
         GeometryReader { geo in
             let size = geo.size
+            // 奥行きは左右の画像の横のずらしで表現する（1080p 換算 px）
+            let depth = model.settings.display.stereoDepth * size.height / 1080
             Group {
-                if isStereo {
-                    // 左右の目に半分ずつ（横に半分に縮める）。奥行きは左右の画像のずらしで表現する。
-                    let depth = model.settings.display.stereoDepth * size.height / 1080
+                switch Self.stereoLayout(surface: surface, size: size, stereoSetting: model.settings.display.stereo3D) {
+                case .none:
+                    scene(size: size, parallax: 0, stereo: false)
+                case .halfSideBySide:
                     HStack(spacing: 0) {
-                        eye(size: size, parallax: depth / 2)
-                        eye(size: size, parallax: -depth / 2)
+                        halfEye(size: size, parallax: depth / 2)
+                        halfEye(size: size, parallax: -depth / 2)
                     }
-                } else {
-                    scene(size: size, parallax: 0)
+                case .fullSideBySide:
+                    let eye = CGSize(width: size.width / 2, height: size.height)
+                    HStack(spacing: 0) {
+                        scene(size: eye, parallax: depth / 2, stereo: true)
+                            .frame(width: eye.width, height: eye.height)
+                            .clipped()
+                        scene(size: eye, parallax: -depth / 2, stereo: true)
+                            .frame(width: eye.width, height: eye.height)
+                            .clipped()
+                    }
                 }
             }
             .frame(width: size.width, height: size.height)
@@ -30,15 +54,15 @@ struct HUDRootView: View {
         .background(Color.black)
     }
 
-    private func eye(size: CGSize, parallax: CGFloat) -> some View {
-        scene(size: size, parallax: parallax)
+    private func halfEye(size: CGSize, parallax: CGFloat) -> some View {
+        scene(size: size, parallax: parallax, stereo: true)
             .frame(width: size.width, height: size.height)
             .scaleEffect(x: 0.5, y: 1)
             .frame(width: size.width / 2, height: size.height)
             .clipped()
     }
 
-    private func scene(size: CGSize, parallax: CGFloat) -> some View {
+    private func scene(size: CGSize, parallax: CGFloat, stereo: Bool) -> some View {
         let canvas = model.layout.canvas
         let content = CGSize(width: size.width * canvas.scale, height: size.height * canvas.scale)
         let head = headLockOffset(size: size)
@@ -49,7 +73,7 @@ struct HUDRootView: View {
         // 明るさ（夜間は自動で暗く）。編集中・サムネイルは常に 100%
         let brightness = surface.isEditable || surface == .thumbnail ? 1 : model.hudBrightness
         return ZStack(alignment: .topLeading) {
-            if isStereo {
+            if stereo {
                 // 3D では背景は黒（＝透明）。カメラ映像は左右に複製できないため。
                 Color.black.frame(width: size.width, height: size.height)
             } else {

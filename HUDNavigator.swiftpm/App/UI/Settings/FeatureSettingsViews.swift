@@ -206,8 +206,18 @@ struct HUDAppearanceSection: View {
                 Text("グラスを 3D モード（左右分割）に切り替えてください。プラスで手前、マイナスで奥に見えます。3D 表示中はカメラ背景を使えません（黒背景になります）。")
                     .font(.caption).foregroundStyle(.secondary)
             }
+            if let size = model.display.externalScreenSize, size.height > 0 {
+                let wide = size.width / size.height >= 3
+                LabeledContent("グラスの信号", value: "\(Int(size.width))×\(Int(size.height))\(wide ? "（3D・左右合計）" : "")")
+                if wide {
+                    Text("グラスが 3D モード（32:9）でつながっています。左右の目に自動で描き分けます（上の設定に関係なく）。")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            }
         } header: {
             Text("3D")
+        } footer: {
+            Text("VITURE は 3D モードで 3840×1080（左右合計）の信号を受け取ります。端末がこの大きさで出力した場合は自動で左右に描き分け、1920×1080 のままの場合は「3D 表示」を ON にすると左右に半分ずつ描きます。")
         }
         Section {
             Toggle("AirPods の頭の向きで HUD を空間に固定", isOn: $model.settings.display.headLockWithAirPods)
