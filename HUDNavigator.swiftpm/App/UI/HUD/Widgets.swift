@@ -254,7 +254,8 @@ struct SchematicMiniMap: View {
             }
             guard let center else { return }
             let metersPerPoint = span / max(1, min(size.width, size.height))
-            let rad = -heading * .pi / 180
+            // 進行方向が上になるように、地図を進行方向の角度だけ回す
+            let rad = heading * .pi / 180
             func project(_ c: GeoCoordinate) -> CGPoint {
                 let dx = (c.longitude - center.longitude) * cos(center.latitude * .pi / 180) * 111_320
                 let dy = (c.latitude - center.latitude) * 110_540
