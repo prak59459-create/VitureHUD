@@ -129,16 +129,18 @@ public struct IntentParser: Sendable {
             return generic.contains(query) ? .open(.navigation) : .search(query)
         }
 
-        // 状態の問い合わせ
-        if has("何時", "なんじ", "時刻", "じこく", "時間を教え") { return .status(.time) }
-        if has("何日", "なんにち", "日付", "ひづけ", "今日は何曜", "曜日") { return .status(.date) }
-        if has("バッテリー", "ばってりー", "電池", "でんち", "充電") { return .status(.battery) }
-        if has("速度", "そくど", "スピード", "速さ", "時速") && !has("表示") { return .status(.speed) }
-        if has("到着", "とうちゃく", "あと何分", "あとなんぷん", "いつ着", "何時に着") { return .status(.eta) }
-        if has("あと何キロ", "あと何メートル", "残り距離", "のこりきょり", "あとどのくらい", "あとどれくらい") { return .status(.remainingDistance) }
-        if has("天気", "てんき", "雨", "あめ", "気温", "きおん", "暑い", "寒い", "傘") && !positive { return .status(.weather) }
-        if has("ここはどこ", "現在地", "げんざいち", "今どこ", "いまどこ") { return .status(.location) }
-        if has("どっち", "方角", "ほうがく", "方位", "北はどっち") { return .status(.heading) }
+        // 状態の問い合わせ（「〇〇を表示して／消して」はウィジェットの操作なので除く）
+        if !(positive || negative) {
+            if has("何時", "なんじ", "時刻", "じこく", "時間を教え") { return .status(.time) }
+            if has("何日", "なんにち", "日付", "ひづけ", "今日は何曜", "曜日") { return .status(.date) }
+            if has("バッテリー", "ばってりー", "電池", "でんち", "充電") { return .status(.battery) }
+            if has("速度", "そくど", "スピード", "速さ", "時速") { return .status(.speed) }
+            if has("到着", "とうちゃく", "あと何分", "あとなんぷん", "いつ着", "何時に着") { return .status(.eta) }
+            if has("あと何キロ", "あと何メートル", "残り距離", "のこりきょり", "あとどのくらい", "あとどれくらい") { return .status(.remainingDistance) }
+            if has("天気", "てんき", "雨", "あめ", "気温", "きおん", "暑い", "寒い", "傘") { return .status(.weather) }
+            if has("ここはどこ", "現在地", "げんざいち", "今どこ", "いまどこ") { return .status(.location) }
+            if has("どっち", "方角", "ほうがく", "方位", "北はどっち") { return .status(.heading) }
+        }
 
         // ウィジェットの表示・非表示（「〇〇を表示して」「〇〇を消して」）
         for kind in WidgetKind.allCases {

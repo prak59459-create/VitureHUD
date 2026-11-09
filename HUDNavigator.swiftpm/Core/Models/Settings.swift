@@ -220,7 +220,7 @@ public enum AssistantProviderKind: String, Codable, CaseIterable, Sendable {
         switch self {
         case .localOnly: return ""
         case .gemini: return "gemini-2.5-flash"
-        case .anthropic: return "claude-haiku-5-5"
+        case .anthropic: return "claude-opus-5-5"
         case .openAICompatible: return "gpt-4o-mini"
         }
     }
@@ -246,6 +246,8 @@ public struct AssistantSettings: Codable, Hashable, Sendable {
     /// 位置情報（丸めた地名レベル）を AI に送ってよいか
     public var sharesApproximateLocation: Bool = false
     public var speaksResponses: Bool = true
+    /// 音声認識を端末内だけで行う（音声を外部に送らない）
+    public var requiresOnDeviceSpeech: Bool = true
     public init() {}
 
     public var effectiveModel: String { model.isEmpty ? provider.defaultModel : model }
@@ -278,6 +280,8 @@ public struct PowerSettings: Codable, Hashable, Sendable {
 
 public struct AppSettings: Codable, Hashable, Sendable {
     public var displayOutput: DisplayOutputPreference = .automatic
+    /// グラスを接続したら自動で HUD を表示する（ミラー表示の場合）
+    public var autoStartHUDOnConnect: Bool = true
     public var map = MapSettings()
     public var voice = VoiceSettings()
     public var notifications = NotificationSettings()

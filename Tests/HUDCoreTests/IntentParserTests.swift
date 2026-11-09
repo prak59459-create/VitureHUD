@@ -58,6 +58,15 @@ final class IntentParserTests: XCTestCase {
         check("カメラを明るくして", .cameraExposure(.up))
     }
 
+    func testShowHideIsNotAStatusQuestion() {
+        check("速度を消して", .hideWidget(.speed))
+        check("バッテリーを表示して", .showWidget(.battery))
+        check("天気を表示", .showWidget(.weather))
+        check("日付を表示して", .showWidget(.date))
+        check("到着予定を表示", .showWidget(.eta))
+        check("気温を非表示", .hideWidget(.temperature))
+    }
+
     func testStatusQuestions() {
         check("今何時？", .status(.time))
         check("バッテリーは？", .status(.battery))
