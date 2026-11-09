@@ -162,6 +162,9 @@ final class HeartRateService {
 
 private final class HeartRateDelegate: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate {
     weak var owner: HeartRateService?
+    // デリゲートは MainActor の外から呼ばれるので、UUID はここで持つ
+    private static let service = CBUUID(string: HeartRateParser.serviceUUID)
+    private static let measurement = CBUUID(string: HeartRateParser.measurementUUID)
 
     func centralManagerDidUpdateState(_ central: CBCentralManager) {
         let s = central.state
@@ -182,13 +185,13 @@ private final class HeartRateDelegate: NSObject, CBCentralManagerDelegate, CBPer
     }
 
     func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: Error?) {
-        for s in peripheral.services ?? [] where s.uuid == HeartRateService.service {
-            peripheral.discoverCharacteristics([HeartRateService.measurement], for: s)
+        for s in peripheral.services ?? [] where s.uuid == Self.service {
+            peripheral.discoverCharacteristics([Self.measurement], for: s)
         }
     }
 
     func peripheral(_ peripheral: CBPeripheral, didDiscoverCharacteristicsFor service: CBService, error: Error?) {
-        for c in service.characteristics ?? [] where c.uuid == HeartRateService.measurement {
+        for c in service.characteristics ?? [] where c.uuid == Self.measurement {
             peripheral.setNotifyValue(true, for: c)
         }
     }

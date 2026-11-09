@@ -25,6 +25,8 @@
 > | Apple Watch | D | D | AltStore での watchOS 導入は想定しない |
 >
 > 下表の個別記述のうち Swift Playgrounds を理由にしたものは、上の表が優先する。
+>
+> **追加実装（2026-11-09）**：Google Maps（Places/Routes の REST・SDK なし）、ホーム画面ウィジェット（App ID を2つ使う「widgets 版」IPA を別に配布）、iCloud Drive フォルダでの自動同期（CloudKit の代わり）、Bluetooth 心拍計、外部カメラ、白線・標識（実験）、AirPods での空間固定（VITURE のトラッキングの代わり）を実装した。現在の状況は [14_implementation_status.md](14_implementation_status.md) が最新。
 
 ## 2. 外部ディスプレイ
 

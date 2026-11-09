@@ -3,13 +3,14 @@
 VITURE XR グラス × iPad A16 / iPhone 15 向けのスマート HUD ナビゲーションアプリ（SwiftUI）。
 
 - 黒背景（グラス上で透明）／カメラ背景の HUD
-- 自由に配置できるパネル（19種のウィジェット）、テーマ7種・プリセット7種＋自作
-- Apple MapKit のナビ（検索・周辺施設・ルート比較・音声案内・リルート・デモ再生）
-- センサー（GPS・コンパス・加速度・ジャイロ・AirPods の頭の向き）と省電力制御
-- 物体認識・危険検知（実験機能・安全装置ではない）
-- 日本語の音声コマンド（端末内）＋任意のクラウド AI（APIキー・同意制）
-- 天気・空気質（Open-Meteo）、通知設定、移動履歴とグラフ、設定ファイルでの端末間同期
-- ショートカット連携（正式アプリのみ）、実機テストモード
+- 自由に配置できるパネル（23種のウィジェット・テンプレート文字）、テーマ7種・プリセット7種＋自作
+- Apple MapKit のナビ（検索・周辺施設・ルート比較・音声案内・リルート・デモ再生）＋任意の Google Maps（乗り換え案内・評価・営業時間）
+- センサー（GPS・コンパス・加速度・ジャイロ・AirPods の頭の向き・Bluetooth 心拍計・外部カメラ）と省電力制御
+- 物体認識・危険検知・白線・標識の読み取り（実験機能・安全装置ではない）
+- 明るさ・夜の自動減光・3D（左右分割）・AirPods での空間固定
+- 日本語の音声コマンド（端末内）＋任意のクラウド AI（APIキー・同意制。AI がアプリを操作することも可能）＋状況に合わせた提案
+- 天気・空気質・1時間ごとの予報（Open-Meteo）、通知設定、移動履歴・訪問した場所・利用状況、iCloud Drive フォルダでの自動同期
+- ショートカット・URL 操作・ホーム画面ウィジェット・コントロールセンター（正式アプリのみ）、iPad のキーボード操作、実機テストモード
 
 ## 入手
 
@@ -19,6 +20,7 @@ VITURE XR グラス × iPad A16 / iPhone 15 向けのスマート HUD ナビゲ�
 |---------|--------|
 | `HUDNavigator.swiftpm.zip` | iPad の **Swift Playgrounds** で開く（回数無制限で試せる） |
 | `HUDNavigator.ipa` | **AltStore** で iPad / iPhone 15 にインストール（7日ごとに更新） |
+| `HUDNavigator-widgets.ipa` | 上と同じ＋ホーム画面・ロック画面のウィジェットとコントロールセンターのボタン（App ID を2つ使う） |
 
 使い方：[docs/user_guide.md](docs/user_guide.md)　／　実機テスト：[docs/device_test_checklist.md](docs/device_test_checklist.md)
 
@@ -45,8 +47,9 @@ swift test
 
 ```
 HUDNavigator.swiftpm/
-├── Core/   純粋ロジック（Foundation のみ）：モデル、レイアウト、ルート進捗、案内、危険度、音声コマンド解析 …
-└── App/    iOS：AppModel、サービス（カメラ・位置・地図・音声・天気・AI …）、UI（HUD・編集・ナビ・設定 …）
+├── Core/   純粋ロジック（Foundation のみ）：モデル、レイアウト、ルート進捗、案内、危険度、音声コマンド解析、Google Maps の解析 …
+└── App/    iOS：AppModel、サービス（カメラ・位置・地図・音声・天気・AI・心拍計・同期 …）、UI（HUD・編集・ナビ・設定 …）
+Extensions/Widgets/   ホーム画面ウィジェット・コントロールセンター（正式アプリの widgets 版のみ）
 Tests/HUDCoreTests/   Core の XCTest（Linux）
 AppTests/             iOS の XCTest・HUD スナップショット
 ```
