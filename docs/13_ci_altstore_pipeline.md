@@ -128,13 +128,27 @@ Xcode のバージョンは `xcode-select` で固定し、ランナーイメー�
 - アプリ内に **実機テストモード** を用意：チェック項目の合否・計測値（fps・温度推移・電池・GPS精度）を記録し、**JSON レポートとして書き出し**できるようにする。
 - ユーザーはそのレポートを GitHub Issue に添付（またはテキストで貼り付け）→ こちらで解析し、次の修正に反映。
 
-## 7. AltStore への受け渡し手順（予定）
+## 7. AltStore への受け渡し手順
 
+### 7-1. AltStore のソース（実装済み）
+CI がビルドごとに AltStore のソース（JSON）を作り、Release「latest」に添付する。URL は変わらない：
+
+```
+https://github.com/prak59459-create/VitureHUD/releases/download/latest/altstore-source.json
+https://github.com/prak59459-create/VitureHUD/releases/download/latest/altstore-source-widgets.json  （ウィジェット付き）
+```
+
+- AltStore →「ソース」→「＋」で URL を追加すると、AltStore の中からインストール・更新できる
+- バージョンはビルドごとに `0.2.<ビルド番号>`（CFBundleVersion＝ビルド番号）に上がるので、新しいビルドは「更新」として届く
+- 権限（`appPermissions.privacy`）は、ビルドした .app の Info.plist の `…UsageDescription` をそのまま載せる（AltStore は宣言と IPA の中身が一致しないとインストールを断るため）。entitlement は無し（署名なしでビルドし、AltStore が署名する）
+- アイコン（icon.png）とスクリーンショット（シミュレータで作った HUD の画像）も Release に添付
+- 生成：`scripts/altstore_source.py`（JSON）、`scripts/altstore_assets.sh`（アイコン・スクリーンショット・2 種類の JSON）
+- 注意：Release「latest」はビルドのたびに作り直すため、作り直しの数秒間は URL が見つからないことがある
+
+### 7-2. ファイルで入れる場合
 1. GitHub の Releases ページを iPad / iPhone の Safari で開き、`.ipa` をダウンロード（ファイルアプリに保存）
 2. AltStore の「マイApp」→「＋」から `.ipa` を選択してインストール
 3. 7日以内に AltStore で更新（AltServer の起動した PC と同じ Wi-Fi）
-
-将来の改善候補：AltStore の「ソース」（アプリ配信用 JSON）を GitHub Pages で配信し、AltStore 内から更新できるようにする【AltStore 側の対応状況は要確認】。
 
 ## 8. セキュリティ・公開リポジトリの注意
 

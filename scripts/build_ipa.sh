@@ -4,6 +4,11 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 OUT="${1:-dist}"
 mkdir -p "$OUT" build/logs
+# AltStore が更新を見つけられるよう、ビルドごとにバージョンを上げる（0.2.<ビルド番号>）
+VERSION_ARGS=()
+if [[ -n "${GITHUB_RUN_NUMBER:-}" ]]; then
+  VERSION_ARGS=(MARKETING_VERSION="0.2.${GITHUB_RUN_NUMBER}" CURRENT_PROJECT_VERSION="${GITHUB_RUN_NUMBER}")
+fi
 set -o pipefail
 xcodebuild \
   -project HUDNavigator.xcodeproj \
@@ -13,6 +18,7 @@ xcodebuild \
   -destination 'generic/platform=iOS' \
   -derivedDataPath build/DeviceData \
   CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" CODE_SIGN_ENTITLEMENTS="" \
+  "${VERSION_ARGS[@]}" \
   -quiet \
   build 2>&1 | tee build/logs/device.log
 

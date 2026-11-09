@@ -16,6 +16,17 @@ VITURE XR グラス × iPad A16 / iPhone 15 向けのスマート HUD ナビゲ�
 
 ## 入手
 
+### AltStore のソース（おすすめ・更新が自動で届く）
+AltStore →「ソース（Sources）」→「＋」→ 次の URL を追加：
+
+```
+https://github.com/prak59459-create/VitureHUD/releases/download/latest/altstore-source.json
+```
+
+ウィジェット付きの版は `https://github.com/prak59459-create/VitureHUD/releases/download/latest/altstore-source-widgets.json`（どちらか一方だけ追加してください）。
+
+### ファイルで入手
+
 [Releases](https://github.com/prak59459-create/VitureHUD/releases) の「最新ビルド」から：
 
 | ファイル | 使い方 |

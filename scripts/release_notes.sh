@@ -15,7 +15,15 @@ RUN="${GITHUB_RUN_NUMBER:-local}"
   echo "- **HUDNavigator-widgets.ipa** … ホーム画面・ロック画面のウィジェットとコントロールセンターのボタン付き（AltStore の無料アカウントでは App ID を 2 つ使います。7日で10個まで）"
   echo "- **HUDNavigator.swiftpm.zip** … iPad の Swift Playgrounds で開く版（回数無制限で試せます）"
   echo
-  echo "### インストール（AltStore）"
+  echo "### AltStore のソースとして追加（おすすめ・更新が自動で届きます）"
+  echo "AltStore →「ソース（Sources）」→「＋」→ 次の URL を入力："
+  echo
+  echo '```'
+  echo "https://github.com/${GITHUB_REPOSITORY:-prak59459-create/VitureHUD}/releases/download/latest/altstore-source.json"
+  echo '```'
+  echo 'ウィジェット付きの版：`…/releases/download/latest/altstore-source-widgets.json`（どちらか一方だけ追加してください）'
+  echo
+  echo "### インストール（AltStore・手動）"
   echo "1. この .ipa を iPad / iPhone の Safari でダウンロード（ファイルに保存）"
   echo "2. AltStore → マイApp → ＋ → HUDNavigator.ipa を選ぶ"
   echo "3. 7日ごとに AltStore で更新（署名の期限）"

@@ -11,6 +11,12 @@
 - ショートカット連携は使えません
 
 ### B. AltStore（iPad / iPhone 15・正式アプリ）
+**ソースとして追加する（おすすめ）**：AltStore →「ソース（Sources）」→「＋」→
+`https://github.com/prak59459-create/VitureHUD/releases/download/latest/altstore-source.json`
+を追加すると、AltStore の中から「HUD Navigator」をインストールでき、新しいビルドが出ると「更新」が表示されます
+（ウィジェット付きの版は `…/altstore-source-widgets.json`。どちらか一方だけ）。
+
+**ファイルで入れる場合**：
 1. 同じ Releases から **HUDNavigator.ipa** をダウンロード（ファイルに保存）
 2. AltStore → マイApp → 左上の「＋」→ HUDNavigator.ipa を選ぶ
 3. 署名は7日で切れるので、AltStore で更新してください（Windows の AltServer と同じ Wi-Fi）

@@ -58,6 +58,10 @@ jobs:
         if: github.event_name != 'pull_request'
         run: bash scripts/build_ipa.sh dist
 
+      - name: AltStore source (JSON, icon, screenshots)
+        if: github.event_name != 'pull_request'
+        run: bash scripts/altstore_assets.sh dist
+
       - name: Package for Swift Playgrounds
         run: bash scripts/package_swiftpm.sh dist
 
