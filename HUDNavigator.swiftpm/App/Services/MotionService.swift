@@ -31,6 +31,8 @@ final class MotionService {
     @ObservationIgnored private var recentAcceleration: [Double] = []
     @ObservationIgnored private var updateHz: Double = 30
     @ObservationIgnored private var lastShake: Date?
+    /// シェイクしたとき（HUD 表示中に案内をもう一度読み上げる）
+    @ObservationIgnored var onShake: (() -> Void)?
 
     var isDeviceMotionAvailable: Bool { manager.isDeviceMotionAvailable }
     var isHeadphoneMotionAvailable: Bool { headphoneManager.isDeviceMotionAvailable }
@@ -124,6 +126,7 @@ final class MotionService {
             if lastShake.map({ now.timeIntervalSince($0) > 1.5 }) ?? true {
                 lastShake = now
                 isShakeDetected = true
+                onShake?()
                 Task { @MainActor [weak self] in
                     try? await Task.sleep(nanoseconds: 600_000_000)
                     self?.isShakeDetected = false

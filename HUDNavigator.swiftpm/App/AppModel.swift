@@ -132,6 +132,10 @@ final class AppModel {
         }
 
         location.onSample = { [unowned self] sample in self.handleLocation(sample) }
+        motion.onShake = { [unowned self] in
+            guard self.isHUDVisible else { return }
+            Task { await self.perform(.repeatGuidance) }
+        }
         configureNavigationCallbacks()
         configureVisionCallbacks()
 
