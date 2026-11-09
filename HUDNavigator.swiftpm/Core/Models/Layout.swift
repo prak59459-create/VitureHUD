@@ -70,6 +70,8 @@ public struct CanvasSettings: Codable, Hashable, Sendable {
     public var preventOverlap: Bool
     /// 1080p 換算の最小文字サイズ（px）。これより小さい文字は描画時に引き上げる。
     public var minimumFontPixels: Double
+    /// 全パネルの文字の倍率（音声「文字を大きく」などで変える）
+    public var textScale: Double
 
     public init(
         offsetX: Double = 0,
@@ -79,7 +81,8 @@ public struct CanvasSettings: Codable, Hashable, Sendable {
         gridDivisions: Int = 48,
         snapToGrid: Bool = true,
         preventOverlap: Bool = true,
-        minimumFontPixels: Double = 22
+        minimumFontPixels: Double = 22,
+        textScale: Double = 1
     ) {
         self.offsetX = offsetX
         self.offsetY = offsetY
@@ -89,10 +92,11 @@ public struct CanvasSettings: Codable, Hashable, Sendable {
         self.snapToGrid = snapToGrid
         self.preventOverlap = preventOverlap
         self.minimumFontPixels = minimumFontPixels
+        self.textScale = textScale
     }
 
     enum CodingKeys: String, CodingKey {
-        case offsetX, offsetY, scale, safeMargin, gridDivisions, snapToGrid, preventOverlap, minimumFontPixels
+        case offsetX, offsetY, scale, safeMargin, gridDivisions, snapToGrid, preventOverlap, minimumFontPixels, textScale
     }
 
     public init(from decoder: Decoder) throws {
@@ -106,6 +110,7 @@ public struct CanvasSettings: Codable, Hashable, Sendable {
         snapToGrid = c.value(.snapToGrid, default: d.snapToGrid)
         preventOverlap = c.value(.preventOverlap, default: d.preventOverlap)
         minimumFontPixels = c.value(.minimumFontPixels, default: d.minimumFontPixels)
+        textScale = c.value(.textScale, default: d.textScale)
     }
 
     /// 値を安全な範囲に収める。
@@ -117,6 +122,7 @@ public struct CanvasSettings: Codable, Hashable, Sendable {
         s.safeMargin = safeMargin.clamped(to: 0...0.2)
         s.gridDivisions = gridDivisions.clamped(to: 4...96)
         s.minimumFontPixels = minimumFontPixels.clamped(to: 10...60)
+        s.textScale = textScale.clamped(to: 0.6...1.8)
         return s
     }
 }

@@ -55,8 +55,11 @@ public struct SettingsBundle: Codable, Sendable {
     public var presets: [Preset]
     public var favorites: [FavoritePlace]
     public var trips: [TripRecord]?
+    public var visits: [VisitRecord]?
+    /// 書き出した端末の識別子（自動同期で自分のファイルを読み直さないため）
+    public var deviceID: String?
 
-    public init(version: Int = SettingsBundle.currentVersion, exportedAt: Date, deviceName: String, settings: AppSettings?, themes: [Theme], presets: [Preset], favorites: [FavoritePlace], trips: [TripRecord]? = nil) {
+    public init(version: Int = SettingsBundle.currentVersion, exportedAt: Date, deviceName: String, settings: AppSettings?, themes: [Theme], presets: [Preset], favorites: [FavoritePlace], trips: [TripRecord]? = nil, visits: [VisitRecord]? = nil, deviceID: String? = nil) {
         self.version = version
         self.exportedAt = exportedAt
         self.deviceName = deviceName
@@ -65,10 +68,12 @@ public struct SettingsBundle: Codable, Sendable {
         self.presets = presets
         self.favorites = favorites
         self.trips = trips
+        self.visits = visits
+        self.deviceID = deviceID
     }
 
     enum CodingKeys: String, CodingKey {
-        case version, exportedAt, deviceName, settings, themes, presets, favorites, trips
+        case version, exportedAt, deviceName, settings, themes, presets, favorites, trips, visits, deviceID
     }
 
     public init(from decoder: Decoder) throws {
@@ -81,14 +86,23 @@ public struct SettingsBundle: Codable, Sendable {
         presets = c.value(.presets, default: [])
         favorites = c.value(.favorites, default: [])
         trips = c.value(.trips, default: nil)
+        visits = c.value(.visits, default: nil)
+        deviceID = c.value(.deviceID, default: nil)
     }
 
     public func encoded() throws -> Data { try HUDJSON.encode(self) }
 
     public static func decode(_ data: Data) throws -> SettingsBundle {
-        let bundle = try HUDJSON.decode(SettingsBundle.self, from: data)
+        var bundle = try HUDJSON.decode(SettingsBundle.self, from: data)
         guard bundle.version <= currentVersion else {
             throw SettingsBundleError.newerVersion(bundle.version)
+        }
+        // 設定は項目が増減しても読めるよう、既定値と合成して読み直す
+        if let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let raw = object["settings"] as? [String: Any],
+           let settingsData = try? JSONSerialization.data(withJSONObject: raw),
+           let merged = try? AppSettings.decodeMergingDefaults(from: settingsData) {
+            bundle.settings = merged
         }
         return bundle
     }

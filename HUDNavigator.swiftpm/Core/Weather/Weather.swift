@@ -1,5 +1,22 @@
 import Foundation
 
+/// 1時間ごとの予報
+public struct HourlyForecast: Codable, Hashable, Sendable {
+    public var time: Date
+    public var temperature: Double?
+    public var precipitationProbability: Double?
+    public var weatherCode: Int?
+
+    public init(time: Date, temperature: Double? = nil, precipitationProbability: Double? = nil, weatherCode: Int? = nil) {
+        self.time = time
+        self.temperature = temperature
+        self.precipitationProbability = precipitationProbability
+        self.weatherCode = weatherCode
+    }
+
+    public var symbolName: String { weatherCode.map { WeatherCode.symbol($0, isDay: true) } ?? "questionmark.circle" }
+}
+
 /// 天気・環境情報。取得できない値は nil（架空の値は表示しない）。
 public struct WeatherSnapshot: Codable, Hashable, Sendable {
     public var temperature: Double?
@@ -21,11 +38,21 @@ public struct WeatherSnapshot: Codable, Hashable, Sendable {
     public var fetchedAt: Date
     public var source: String
     public var sourceURL: String
+    /// これから先の1時間ごとの予報（最大12時間）
+    public var hourly: [HourlyForecast] = []
 
     public init(fetchedAt: Date, source: String = "Open-Meteo.com", sourceURL: String = "https://open-meteo.com/") {
         self.fetchedAt = fetchedAt
         self.source = source
         self.sourceURL = sourceURL
+    }
+
+    /// 指定時間内に、降水確率が閾値以上になる最初の時間帯
+    public func rainExpected(withinHours hours: Double, threshold: Double, after now: Date) -> HourlyForecast? {
+        hourly.first { h in
+            h.time >= now.addingTimeInterval(-1800) && h.time <= now.addingTimeInterval(hours * 3600)
+                && (h.precipitationProbability ?? 0) >= threshold
+        }
     }
 
     public var conditionText: String { weatherCode.map(WeatherCode.description) ?? "不明" }
@@ -110,8 +137,8 @@ public enum OpenMeteo {
             URLQueryItem(name: "latitude", value: String(format: "%.3f", c.latitude)),
             URLQueryItem(name: "longitude", value: String(format: "%.3f", c.longitude)),
             URLQueryItem(name: "current", value: "temperature_2m,apparent_temperature,relative_humidity_2m,precipitation,weather_code,wind_speed_10m,wind_direction_10m,is_day,uv_index"),
-            URLQueryItem(name: "hourly", value: "precipitation_probability"),
-            URLQueryItem(name: "forecast_hours", value: "3"),
+            URLQueryItem(name: "hourly", value: "precipitation_probability,temperature_2m,weather_code"),
+            URLQueryItem(name: "forecast_hours", value: "12"),
             URLQueryItem(name: "wind_speed_unit", value: "ms"),
             URLQueryItem(name: "timezone", value: "auto"),
         ]
@@ -145,6 +172,8 @@ public enum OpenMeteo {
         struct Hourly: Decodable {
             var time: [String]?
             var precipitation_probability: [Double?]?
+            var temperature_2m: [Double?]?
+            var weather_code: [Int?]?
         }
         var current: Current?
         var hourly: Hourly?
@@ -178,6 +207,18 @@ public enum OpenMeteo {
         }
         if let probs = r.hourly?.precipitation_probability {
             s.precipitationProbability = probs.compactMap { $0 }.first
+        }
+        if let h = r.hourly, let times = h.time {
+            let offset = r.utc_offset_seconds ?? 0
+            s.hourly = times.enumerated().compactMap { i, t in
+                guard let date = parseLocalTime(t, utcOffset: offset) else { return nil }
+                return HourlyForecast(
+                    time: date,
+                    temperature: h.temperature_2m.flatMap { i < $0.count ? $0[i] : nil },
+                    precipitationProbability: h.precipitation_probability.flatMap { i < $0.count ? $0[i] : nil },
+                    weatherCode: h.weather_code.flatMap { i < $0.count ? $0[i] : nil }
+                )
+            }
         }
         return s
     }

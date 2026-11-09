@@ -2,6 +2,18 @@ import Foundation
 
 public enum ZoomDirection: String, Codable, Sendable { case zoomIn, zoomOut }
 public enum AdjustDirection: String, Codable, Sendable { case up, down }
+public enum MoveDirection: String, Codable, CaseIterable, Sendable {
+    case up, down, left, right
+
+    public var displayName: String {
+        switch self {
+        case .up: return "上"
+        case .down: return "下"
+        case .left: return "左"
+        case .right: return "右"
+        }
+    }
+}
 
 public enum StatusTopic: String, Codable, CaseIterable, Sendable {
     case time, date, battery, speed, eta, remainingDistance, weather, location, heading
@@ -138,6 +150,22 @@ public enum AppCommand: Hashable, Sendable {
     case cameraExposure(AdjustDirection)
     case repeatGuidance
     case autoArrange
+    /// HUD 全体の大きさ
+    case adjustHUDScale(AdjustDirection)
+    /// HUD 全体の位置
+    case moveHUD(MoveDirection)
+    /// 文字の大きさ（最小文字サイズとテーマの倍率）
+    case adjustTextSize(AdjustDirection)
+    /// HUD の明るさ
+    case adjustBrightness(AdjustDirection)
+    case setNightDim(Bool)
+    case setStereo3D(Bool)
+    /// 次（+1）／前（-1）のプリセット
+    case cyclePreset(Int)
+    case nextTheme
+    case connectHeartRate
+    case syncNow
+    case setRecording(Bool)
     case cancel
     /// 定型コマンドに当てはまらない質問（AIアシスタントへ）
     case ask(String)
@@ -168,6 +196,17 @@ public enum AppCommand: Hashable, Sendable {
         case .cameraExposure(let d): return d == .up ? "カメラを明るく" : "カメラを暗く"
         case .repeatGuidance: return "案内をもう一度"
         case .autoArrange: return "パネルを自動整列"
+        case .adjustHUDScale(let d): return d == .up ? "HUDを大きく" : "HUDを小さく"
+        case .moveHUD(let d): return "HUDを\(d.displayName)へ移動"
+        case .adjustTextSize(let d): return d == .up ? "文字を大きく" : "文字を小さく"
+        case .adjustBrightness(let d): return d == .up ? "HUDを明るく" : "HUDを暗く"
+        case .setNightDim(let on): return on ? "夜間の減光をオン" : "夜間の減光をオフ"
+        case .setStereo3D(let on): return on ? "3D表示をオン" : "3D表示をオフ"
+        case .cyclePreset(let n): return n >= 0 ? "次のプリセット" : "前のプリセット"
+        case .nextTheme: return "次のテーマ"
+        case .connectHeartRate: return "心拍計に接続"
+        case .syncNow: return "今すぐ同期"
+        case .setRecording(let on): return on ? "移動の記録を開始" : "移動の記録を終了"
         case .cancel: return "キャンセル"
         case .ask(let q): return "質問：\(q)"
         }

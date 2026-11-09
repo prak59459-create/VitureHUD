@@ -2,7 +2,7 @@ import Foundation
 
 /// ウィジェットが動作に必要とするサービス。表示中のウィジェットだけサービスを起動する（省電力）。
 public enum WidgetRequirement: String, Codable, CaseIterable, Sendable {
-    case location, heading, motion, weather, navigation, camera, battery, assistant, alerts
+    case location, heading, motion, weather, navigation, camera, battery, assistant, alerts, bluetooth
 }
 
 public enum WidgetKind: String, Codable, CaseIterable, Sendable {
@@ -25,6 +25,10 @@ public enum WidgetKind: String, Codable, CaseIterable, Sendable {
     case assistant
     case detections
     case customText
+    case heartRate
+    case horizon
+    case hourlyForecast
+    case nearbyPlaces
 
     public var displayName: String {
         switch self {
@@ -46,7 +50,11 @@ public enum WidgetKind: String, Codable, CaseIterable, Sendable {
         case .sensors: return "センサー情報"
         case .assistant: return "AIアシスタント"
         case .detections: return "物体検出"
-        case .customText: return "テキスト"
+        case .customText: return "テキスト（テンプレート）"
+        case .heartRate: return "心拍数"
+        case .horizon: return "水平器"
+        case .hourlyForecast: return "時間ごとの天気"
+        case .nearbyPlaces: return "周辺施設"
         }
     }
 
@@ -72,6 +80,10 @@ public enum WidgetKind: String, Codable, CaseIterable, Sendable {
         case .assistant: return "waveform"
         case .detections: return "viewfinder"
         case .customText: return "textformat"
+        case .heartRate: return "heart.fill"
+        case .horizon: return "level"
+        case .hourlyForecast: return "clock.badge.checkmark"
+        case .nearbyPlaces: return "mappin.and.ellipse"
         }
     }
 
@@ -88,6 +100,10 @@ public enum WidgetKind: String, Codable, CaseIterable, Sendable {
         case .sensors: return [.motion]
         case .assistant: return [.assistant]
         case .detections: return [.camera]
+        case .heartRate: return [.bluetooth]
+        case .horizon: return [.motion]
+        case .hourlyForecast: return [.location, .weather]
+        case .nearbyPlaces: return [.location]
         }
     }
 
@@ -111,6 +127,10 @@ public enum WidgetKind: String, Codable, CaseIterable, Sendable {
         case .assistant: return (0.34, 0.12)
         case .detections: return (0.18, 0.10)
         case .customText: return (0.20, 0.08)
+        case .heartRate: return (0.12, 0.10)
+        case .horizon: return (0.14, 0.14)
+        case .hourlyForecast: return (0.34, 0.14)
+        case .nearbyPlaces: return (0.26, 0.18)
         }
     }
 }

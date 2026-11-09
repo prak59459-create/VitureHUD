@@ -50,10 +50,39 @@ public struct IntentParser: Sendable {
         if has("hud", "ハッド", "はっど", "ヘッドアップ") {
             if has("編集", "へんしゅう") { return .open(.hudEditor) }
             if has("整列", "せいれつ", "並べ", "ならべ") { return .autoArrange }
+            if has("3d", "立体", "りったい") { return .setStereo3D(!negative) }
+            if has("明るく", "あかるく") { return .adjustBrightness(.up) }
+            if has("暗く", "くらく") { return .adjustBrightness(.down) }
+            if has("大きく", "おおきく", "拡大") { return .adjustHUDScale(.up) }
+            if has("小さく", "ちいさく", "縮小") { return .adjustHUDScale(.down) }
+            if let dir = Self.moveDirection(text) { return .moveHUD(dir) }
             if negative { return .stopHUD }
             if positive || has("起動", "きどう") { return .startHUD }
         }
         if has("自動整列", "整列して", "並べて", "ならべて") { return .autoArrange }
+
+        // 文字の大きさ・明るさ・夜間
+        if has("文字", "もじ", "字を") {
+            if has("大きく", "おおきく") { return .adjustTextSize(.up) }
+            if has("小さく", "ちいさく") { return .adjustTextSize(.down) }
+        }
+        if has("画面を明るく", "表示を明るく") { return .adjustBrightness(.up) }
+        if has("画面を暗く", "表示を暗く", "まぶしい", "眩しい") { return .adjustBrightness(.down) }
+        if has("夜間", "やかん", "ナイトモード") { return .setNightDim(!negative) }
+        if has("立体表示", "3d表示", "3dモード") && !has("地図", "マップ") { return .setStereo3D(!negative) }
+
+        // プリセット・テーマの順送り
+        if has("次のプリセット", "つぎのプリセット", "プリセットを変え", "次のモード") { return .cyclePreset(1) }
+        if has("前のプリセット", "まえのプリセット", "前のモード") { return .cyclePreset(-1) }
+        if has("テーマを変え", "次のテーマ", "つぎのテーマ", "別のテーマ") { return .nextTheme }
+
+        // 心拍計・同期・記録
+        if has("心拍計", "心拍センサー", "しんぱくけい") && has("接続", "つない", "繋い", "せつぞく") { return .connectHeartRate }
+        if has("同期", "どうき", "シンク") { return .syncNow }
+        if has("記録") && !has("履歴") {
+            if has("開始", "始め", "はじめ", "スタート") { return .setRecording(true) }
+            if has("終了", "止め", "とめ", "やめ", "終わ") { return .setRecording(false) }
+        }
 
         // プリセット・テーマ
         if has("テーマ", "てーま") {
@@ -162,6 +191,14 @@ public struct IntentParser: Sendable {
         return .ask(rawText.trimmingCharacters(in: .whitespacesAndNewlines))
     }
 
+    static func moveDirection(_ text: String) -> MoveDirection? {
+        if text.contains("上に") || text.contains("うえに") || text.contains("上へ") { return .up }
+        if text.contains("下に") || text.contains("したに") || text.contains("下へ") { return .down }
+        if text.contains("右に") || text.contains("みぎに") || text.contains("右へ") { return .right }
+        if text.contains("左に") || text.contains("ひだりに") || text.contains("左へ") { return .left }
+        return nil
+    }
+
     static func widgetAliases(_ kind: WidgetKind) -> [String] {
         switch kind {
         case .clock: return ["時計", "とけい"]
@@ -183,6 +220,10 @@ public struct IntentParser: Sendable {
         case .assistant: return ["アシスタント", "あしすたんと"]
         case .detections: return ["検出結果", "検出表示"]
         case .customText: return ["テキスト", "メモ"]
+        case .heartRate: return ["心拍", "しんぱく", "脈拍"]
+        case .horizon: return ["水平器", "すいへいき", "水平"]
+        case .hourlyForecast: return ["時間ごとの天気", "天気予報", "予報"]
+        case .nearbyPlaces: return ["周辺施設", "近くの施設"]
         }
     }
 

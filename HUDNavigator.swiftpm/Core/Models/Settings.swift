@@ -21,12 +21,12 @@ public enum MapEngine: String, Codable, CaseIterable, Sendable {
     public var displayName: String {
         switch self {
         case .appleMapKit: return "Apple マップ（MapKit）"
-        case .googleMaps: return "Google Maps（未対応・将来対応）"
+        case .googleMaps: return "Google Maps（APIキー・従量課金）"
         }
     }
 
-    /// 現在のビルドで使えるか。Google Maps は APIキー・課金の確認が必要なため未実装。
-    public var isAvailable: Bool { self == .appleMapKit }
+    /// Google Maps は REST API（Routes / Places）で使う。APIキーと同意がある場合のみ有効。
+    public var needsAPIKey: Bool { self == .googleMaps }
 }
 
 public enum MapOrientation: String, Codable, CaseIterable, Sendable {
@@ -181,6 +181,8 @@ public struct CameraSettings: Codable, Hashable, Sendable {
     /// コントラスト（0.5〜1.5、1.0 で無加工）
     public var contrast: Double = 1
     public var prefersUltraWide: Bool = false
+    /// USB 接続の外部カメラを使う（iPad のみ）
+    public var useExternalCamera: Bool = false
     public init() {}
 }
 
@@ -198,6 +200,10 @@ public struct DetectionSettings: Codable, Hashable, Sendable {
     public var hazardAlertsEnabled: Bool = false
     /// 初回同意（実験機能・安全装置ではない）を取ったか
     public var hasAcceptedDisclaimer: Bool = false
+    /// 路面の線（車線・白線）の検出（実験）
+    public var detectsLanes: Bool = false
+    /// 標識・看板の文字を読む（実験）
+    public var readsSigns: Bool = false
     public init() {}
 }
 
@@ -248,6 +254,8 @@ public struct AssistantSettings: Codable, Hashable, Sendable {
     public var speaksResponses: Bool = true
     /// 音声認識を端末内だけで行う（音声を外部に送らない）
     public var requiresOnDeviceSpeech: Bool = true
+    /// 定型コマンドに当てはまらない依頼を、クラウドAIにアプリ操作へ変換させる
+    public var allowsAICommands: Bool = true
     public init() {}
 
     public var effectiveModel: String { model.isEmpty ? provider.defaultModel : model }
@@ -259,6 +267,10 @@ public struct HistorySettings: Codable, Hashable, Sendable {
     public var enabled: Bool = false
     public var recordsRoutePoints: Bool = false
     public var recordsDetections: Bool = false
+    /// 一定時間とどまった場所を「訪問場所」として記録
+    public var recordsVisits: Bool = false
+    /// 利用状況（HUD 表示時間・よく使うプリセット・コマンド）を記録
+    public var recordsUsage: Bool = true
     public var retentionDays: Int = 90
     public init() {}
 }
@@ -278,6 +290,82 @@ public struct PowerSettings: Codable, Hashable, Sendable {
     public init() {}
 }
 
+/// Google Maps Platform（Routes API・Places API）。APIキーは Keychain に保存。
+public struct GoogleMapsSettings: Codable, Hashable, Sendable {
+    /// 位置・検索語を Google に送ることへの同意
+    public var consentGiven: Bool = false
+    public var usesForSearch: Bool = true
+    public var usesForRoutes: Bool = true
+    /// 公共交通の経路（Routes API の TRANSIT）
+    public var usesForTransit: Bool = true
+    public init() {}
+}
+
+/// iCloud Drive のフォルダを使った自動同期（CloudKit の代わり）
+public struct SyncSettings: Codable, Hashable, Sendable {
+    public var autoSyncEnabled: Bool = false
+    public var includesHistory: Bool = false
+    /// この端末の識別子（端末間で同期しない）
+    public var deviceID: String = UUID().uuidString
+    public var lastExportedAt: Date? = nil
+    public var lastImportedAt: Date? = nil
+    public var folderName: String? = nil
+    public init() {}
+}
+
+/// グラスでの見え方の追加設定
+public struct HUDDisplaySettings: Codable, Hashable, Sendable {
+    /// HUD 全体の明るさ（0.3〜1.0）
+    public var brightness: Double = 1.0
+    /// 夜間は自動で暗くする
+    public var nightDimEnabled: Bool = true
+    public var nightBrightness: Double = 0.6
+    /// 夜の時間帯（時）
+    public var nightStartHour: Int = 19
+    public var nightEndHour: Int = 6
+    /// 3D（左右分割）表示：グラスを 3D モードにしたときに使う
+    public var stereo3D: Bool = false
+    /// 3D の奥行き（左右のずれ、1080p 換算 px）
+    public var stereoDepth: Double = 12
+    /// AirPods の頭の向きで HUD を空間に固定する（実験）
+    public var headLockWithAirPods: Bool = false
+    /// 頭の向き 1度あたりのずらし量（1080p 換算 px）
+    public var headLockStrength: Double = 40
+    /// グラスに独立表示中、端末の画面を暗くする
+    public var dimsDeviceScreen: Bool = true
+    public init() {}
+
+    /// 時刻と昼夜から、今の明るさを求める
+    public func effectiveBrightness(hour: Int, isDaylight: Bool?) -> Double {
+        var b = brightness.clamped(to: 0.2...1)
+        guard nightDimEnabled else { return b }
+        let isNightHour = nightStartHour > nightEndHour
+            ? (hour >= nightStartHour || hour < nightEndHour)
+            : (hour >= nightStartHour && hour < nightEndHour)
+        let night = isDaylight.map { !$0 } ?? isNightHour
+        if night { b *= nightBrightness.clamped(to: 0.2...1) }
+        return b
+    }
+}
+
+public struct BluetoothSettings: Codable, Hashable, Sendable {
+    public var heartRateEnabled: Bool = false
+    /// 前回つないだ心拍計
+    public var rememberedDeviceID: String? = nil
+    public var rememberedDeviceName: String? = nil
+    public init() {}
+}
+
+/// AI からの提案（雨・電池・休憩など）
+public struct ProactiveSettings: Codable, Hashable, Sendable {
+    public var enabled: Bool = true
+    public var weatherTips: Bool = true
+    public var batteryTips: Bool = true
+    public var breakReminders: Bool = true
+    public var nearbyTips: Bool = true
+    public init() {}
+}
+
 public struct AppSettings: Codable, Hashable, Sendable {
     public var displayOutput: DisplayOutputPreference = .automatic
     /// グラスを接続したら自動で HUD を表示する（ミラー表示の場合）
@@ -291,6 +379,11 @@ public struct AppSettings: Codable, Hashable, Sendable {
     public var history = HistorySettings()
     public var privacy = PrivacySettings()
     public var power = PowerSettings()
+    public var googleMaps = GoogleMapsSettings()
+    public var sync = SyncSettings()
+    public var display = HUDDisplaySettings()
+    public var bluetooth = BluetoothSettings()
+    public var proactive = ProactiveSettings()
     public var selectedPresetID: UUID? = nil
     public var hasCompletedOnboarding: Bool = false
     public var showsMetricsOverlay: Bool = false
