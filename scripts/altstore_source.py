@@ -11,6 +11,7 @@ import datetime
 import json
 import os
 import plistlib
+import struct
 import sys
 
 TINT = "00E5FF"
@@ -59,10 +60,16 @@ def main() -> int:
         description += "\n\nこの版はホーム画面・ロック画面のウィジェットとコントロールセンターのボタン付きです（AltStore の無料アカウントでは App ID を 2 つ使います）。"
 
     version_notes = f"ビルド #{run}（{sha}）。変更点は GitHub の Releases を参照してください。"
-    screenshots = [
-        {"imageURL": f"{base}/screenshot-{i}.png", "width": 1920, "height": 1080}
-        for i in range(1, 5)
-    ]
+    # スクリーンショット：出力先にある screenshot-*.png（大きさは PNG のヘッダーから読む）
+    screenshots = []
+    out_dir = os.path.dirname(os.path.abspath(out_path))
+    for fname in sorted(f for f in os.listdir(out_dir) if f.startswith("screenshot-") and f.endswith(".png")):
+        with open(os.path.join(out_dir, fname), "rb") as f:
+            head = f.read(24)
+        if head[:8] != b"\x89PNG\r\n\x1a\n":
+            continue
+        width, height = struct.unpack(">II", head[16:24])
+        screenshots.append({"imageURL": f"{base}/{fname}", "width": width, "height": height})
 
     app = {
         "name": name,

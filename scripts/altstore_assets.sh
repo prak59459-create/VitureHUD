@@ -15,7 +15,7 @@ cp Resources/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png "$OUT/icon.png"
 
 # スクリーンショット（シミュレータのテストで作った HUD の画像。なければスキップ）
 i=1
-for name in preset-walkNav-1920x1080 theme-cyberpunk widgets-new preset-travel-1920x1080; do
+for name in ui-home ui-hud-editor ui-assistant-chat ui-settings preset-walkNav-1920x1080; do
   if [[ -f "build/snapshots/$name.png" ]]; then
     cp "build/snapshots/$name.png" "$OUT/screenshot-$i.png"
     i=$((i + 1))

@@ -24,12 +24,14 @@ struct AssistantScreen: View {
                             }
                         }
                         .padding()
+                        .frame(maxWidth: 760)
+                        .frame(maxWidth: .infinity)
                     }
+                    .appBackground()
                     .onChange(of: model.assistant.messages.count) { _, _ in
                         if let last = model.assistant.messages.last { withAnimation { proxy.scrollTo(last.id, anchor: .bottom) } }
                     }
                 }
-                Divider()
                 InputBar(text: $text) {
                     let t = text
                     text = ""
@@ -57,9 +59,12 @@ struct AssistantStatusCard: View {
                 Button {
                     input.toggle()
                 } label: {
-                    Image(systemName: input.isListening ? "stop.circle.fill" : "mic.circle.fill")
-                        .font(.system(size: 54))
-                        .foregroundStyle(input.isListening ? .orange : UIStyle.accent)
+                    Image(systemName: input.isListening ? "stop.fill" : "mic.fill")
+                        .font(.system(size: 24, weight: .bold))
+                        .foregroundStyle(.black)
+                        .frame(width: 64, height: 64)
+                        .background(input.isListening ? Color.orange : UIStyle.accent, in: Circle())
+                        .shadow(color: (input.isListening ? Color.orange : UIStyle.accent).opacity(0.5), radius: input.isListening ? 20 : 12)
                         .symbolEffect(.pulse, isActive: input.isListening)
                 }
                 .accessibilityLabel(input.isListening ? "聞き取りを止める" : "話しかける")
@@ -106,11 +111,14 @@ struct ExamplesCard: View {
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 8)], spacing: 8) {
                 ForEach(examples, id: \.self) { e in
                     Button { onSelect(e) } label: {
-                        Text("「\(e)」")
-                            .font(.footnote)
+                        Text(e)
+                            .font(.footnote.weight(.medium))
+                            .foregroundStyle(UIStyle.accent)
                             .frame(maxWidth: .infinity)
-                            .padding(8)
-                            .background(Color(.tertiarySystemFill), in: RoundedRectangle(cornerRadius: 8))
+                            .padding(.vertical, 10)
+                            .padding(.horizontal, 8)
+                            .background(UIStyle.accent.opacity(0.10), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(UIStyle.accent.opacity(0.25), lineWidth: 1))
                     }
                     .buttonStyle(.plain)
                 }
@@ -128,8 +136,11 @@ struct MessageBubble: View {
             if message.role == .user { Spacer(minLength: 40) }
             VStack(alignment: message.role == .user ? .trailing : .leading, spacing: 4) {
                 Text(message.text)
-                    .padding(10)
-                    .background(message.role == .user ? UIStyle.accent.opacity(0.25) : Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
+                    .foregroundStyle(message.role == .user ? Color.black : Color.primary)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background(message.role == .user ? UIStyle.accent : UIStyle.cardBackground, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(message.role == .user ? Color.clear : UIStyle.cardStroke, lineWidth: 1))
                 if let command = message.command {
                     Label(command, systemImage: "checkmark.circle").font(.caption2).foregroundStyle(.secondary)
                 }
@@ -144,18 +155,29 @@ struct InputBar: View {
     var onSend: () -> Void
 
     var body: some View {
-        HStack {
+        let empty = text.trimmingCharacters(in: .whitespaces).isEmpty
+        HStack(spacing: 10) {
             TextField("文字で入力（例：東京駅までナビして）", text: $text)
-                .textFieldStyle(.roundedBorder)
                 .submitLabel(.send)
                 .onSubmit { if !text.isEmpty { onSend() } }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 11)
+                .background(UIStyle.fieldBackground, in: Capsule())
+                .overlay(Capsule().strokeBorder(UIStyle.cardStroke, lineWidth: 1))
             Button {
                 onSend()
             } label: {
-                Image(systemName: "paperplane.fill")
+                Image(systemName: "arrow.up")
+                    .font(.headline.weight(.bold))
+                    .foregroundStyle(.black)
+                    .frame(width: 42, height: 42)
+                    .background(UIStyle.accent.opacity(empty ? 0.35 : 1), in: Circle())
             }
-            .disabled(text.trimmingCharacters(in: .whitespaces).isEmpty)
+            .disabled(empty)
+            .accessibilityLabel("送信")
         }
-        .padding()
+        .padding(.horizontal)
+        .padding(.vertical, 10)
+        .background(UIStyle.base)
     }
 }

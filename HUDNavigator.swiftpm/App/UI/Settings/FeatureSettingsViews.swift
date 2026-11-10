@@ -562,8 +562,9 @@ struct DepthSettingsCard: View {
                 model.showsScan3D = true
             } label: {
                 Label("3D スキャン（周りを立体的に記録・測定）", systemImage: "cube.transparent")
+                    .frame(maxWidth: .infinity)
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(.primaryAction)
         }
     }
 }

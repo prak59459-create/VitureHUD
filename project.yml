@@ -43,8 +43,10 @@ targets:
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         CFBundleDevelopmentRegion: ja
+        # 起動画面・全体を暗い見た目に（HUD と同じ黒基調）
         UILaunchScreen:
-          UIColorName: ""
+          UIColorName: LaunchBackground
+        UIUserInterfaceStyle: Dark
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: true
           # グラス（外部ディスプレイ）用のシーン。AppDelegate でも同じ設定を返す
@@ -89,6 +91,7 @@ targets:
         GENERATE_INFOPLIST_FILE: "NO"
         ASSETCATALOG_COMPILER_GENERATE_ASSET_SYMBOLS: "NO"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
 
   HUDNavigatorWidgets:
     type: app-extension

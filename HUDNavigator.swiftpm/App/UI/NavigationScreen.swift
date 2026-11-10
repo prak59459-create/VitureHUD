@@ -228,8 +228,11 @@ struct SearchBar: View {
                 Button { query = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary) }
             }
         }
-        .padding(10)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(.regularMaterial, in: Capsule())
+        .overlay(Capsule().strokeBorder(UIStyle.cardStroke, lineWidth: 1))
+        .shadow(color: .black.opacity(0.35), radius: 10, y: 4)
     }
 }
 
@@ -254,7 +257,8 @@ struct SuggestionList: View {
                 Divider()
             }
         }
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(UIStyle.cardStroke, lineWidth: 1))
     }
 }
 
@@ -266,10 +270,11 @@ struct CategoryChips: View {
                 ForEach(NearbyCategory.allCases, id: \.self) { c in
                     Button { onSelect(c) } label: {
                         Label(c.displayName, systemImage: c.systemImage)
-                            .font(.footnote)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
+                            .font(.footnote.weight(.medium))
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
                             .background(.regularMaterial, in: Capsule())
+                            .overlay(Capsule().strokeBorder(UIStyle.cardStroke, lineWidth: 1))
                     }
                     .buttonStyle(.plain)
                 }
@@ -294,7 +299,7 @@ struct NavigationBottomPanel: View {
                 HStack {
                     Label("\(nav.activeRoute?.destinationName ?? "目的地")に到着しました", systemImage: "flag.checkered").font(.headline)
                     Spacer()
-                    Button("終了") { nav.stop() }.buttonStyle(.borderedProminent)
+                    Button("終了") { nav.stop() }.buttonStyle(.primaryCompact)
                 }
             case .planning:
                 HStack { ProgressView(); Text("ルートを検索中…") }
@@ -326,9 +331,13 @@ struct NavigationBottomPanel: View {
                 }
             }
         }
-        .padding()
+        .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.regularMaterial)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: UIStyle.cardRadius, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: UIStyle.cardRadius, style: .continuous).strokeBorder(UIStyle.cardStroke, lineWidth: 1))
+        .shadow(color: .black.opacity(0.4), radius: 14, y: 4)
+        .padding(.horizontal, 10)
+        .padding(.bottom, 8)
     }
 }
 
@@ -441,7 +450,7 @@ struct RouteChoicePanel: View {
             } label: {
                 Label("案内を開始", systemImage: "location.north.fill").frame(maxWidth: .infinity)
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(.primaryAction)
             .disabled(nav.routes.isEmpty)
         }
     }
@@ -492,7 +501,7 @@ struct GuidancePanel: View {
                 Spacer()
                 if model.display.mode != .independent {
                     Button { model.isHUDPresented = true } label: { Label("HUD", systemImage: "eyeglasses") }
-                        .buttonStyle(.borderedProminent)
+                        .buttonStyle(.primaryCompact)
                 }
             }
         }

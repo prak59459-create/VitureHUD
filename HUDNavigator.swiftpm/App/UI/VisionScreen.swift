@@ -19,7 +19,8 @@ struct VisionScreen: View {
                     }
                     .aspectRatio(model.camera.imageAspect > 1 ? 16 / 9 : 3 / 4, contentMode: .fit)
                     .frame(maxWidth: .infinity)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .clipShape(RoundedRectangle(cornerRadius: UIStyle.cardRadius, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: UIStyle.cardRadius, style: .continuous).strokeBorder(UIStyle.cardStroke, lineWidth: 1))
                     .overlay(alignment: .topLeading) {
                         if model.camera.isRunning {
                             Label("カメラ使用中", systemImage: "circle.fill")
@@ -124,12 +125,19 @@ struct VisionScreen: View {
                     }
                 }
                 .padding()
+                .padding(.bottom, 90)
+                .frame(maxWidth: 860)
+                .frame(maxWidth: .infinity)
             }
+            .appBackground()
             .navigationTitle("ビジョン")
         }
         .sheet(isPresented: $model.showsVisionDisclaimer) {
             VisionDisclaimerSheet()
                 .environment(model)
+                .tint(UIStyle.accent)
+                .fontDesign(.rounded)
+                .preferredColorScheme(.dark)
         }
         .fileImporter(isPresented: $importing, allowedContentTypes: [UTType(filenameExtension: "mlmodel") ?? .data, .data]) { result in
             if case .success(let url) = result {
@@ -227,9 +235,9 @@ struct VisionDisclaimerSheet: View {
                         model.settings.detection.enabled = true
                         dismiss()
                     } label: {
-                        Text("理解して有効にする").frame(maxWidth: .infinity).padding(.vertical, 4)
+                        Text("理解して有効にする").frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.primaryAction)
                     Button("やめる", role: .cancel) { dismiss() }
                         .frame(maxWidth: .infinity)
                 }

@@ -778,7 +778,8 @@ struct SpatialScanScreen: View {
                         }
                         .disabled(scanner.pointCount == 0 && scanner.triangleCount == 0)
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.bordered)
+                    .tint(.white)
                 }
                 .padding(10)
                 .background(.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 12))

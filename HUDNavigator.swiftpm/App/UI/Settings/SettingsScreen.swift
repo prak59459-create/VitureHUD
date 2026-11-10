@@ -15,50 +15,54 @@ struct SettingsScreen: View {
         NavigationStack(path: $model.settingsPath) {
             List {
                 Section("表示") {
-                    link(.display, "外部ディスプレイ（グラス）", "eyeglasses", detail: model.display.mode.displayName)
-                    link(.canvas, "表示位置・大きさ", "rectangle.dashed")
-                    link(.themes, "テーマ", "paintpalette", detail: model.activeTheme.name)
-                    link(.presets, "プリセット", "square.stack", detail: model.activePreset.name)
+                    link(.display, "外部ディスプレイ（グラス）", "eyeglasses", .cyan, detail: model.display.mode.displayName)
+                    link(.canvas, "表示位置・大きさ", "rectangle.dashed", .blue)
+                    link(.themes, "テーマ", "paintpalette.fill", .purple, detail: model.activeTheme.name)
+                    link(.presets, "プリセット", "square.stack.fill", .indigo, detail: model.activePreset.name)
                 }
                 Section("ナビ・音声") {
-                    link(.mapVoice, "地図・ナビ・音声案内", "map")
-                    link(.googleMaps, "Google Maps", "globe.asia.australia", detail: GoogleMapsService.isReady(model.settings.googleMaps) ? "使用する" : "未設定")
-                    link(.notifications, "通知・警告", "bell.badge")
-                    link(.assistant, "AIアシスタント", "waveform", detail: model.settings.assistant.provider.isCloud ? "クラウド" : "端末内")
-                    link(.proactive, "提案", "lightbulb", detail: model.settings.proactive.enabled ? "オン" : "オフ")
+                    link(.mapVoice, "地図・ナビ・音声案内", "map.fill", .green)
+                    link(.googleMaps, "Google Maps", "globe.asia.australia.fill", .teal, detail: GoogleMapsService.isReady(model.settings.googleMaps) ? "使用する" : "未設定")
+                    link(.notifications, "通知・警告", "bell.badge.fill", .red)
+                    link(.assistant, "AIアシスタント", "waveform", .pink, detail: model.settings.assistant.provider.isCloud ? "クラウド" : "端末内")
+                    link(.proactive, "提案", "lightbulb.fill", .yellow, detail: model.settings.proactive.enabled ? "オン" : "オフ")
                 }
-                Section("情報") {
-                    link(.weather, "天気・環境情報", "cloud.sun")
-                    link(.sensors, "センサー情報", "gyroscope")
-                    link(.headTracking, "頭の動き（ヘッドトラッキング）", "move.3d", detail: model.settings.headTracking.source.displayName)
-                    link(.heartRate, "心拍計（Bluetooth）", "heart", detail: model.settings.bluetooth.heartRateEnabled ? model.heartRate.state.displayName : "オフ")
-                    link(.history, "履歴・分析", "chart.xyaxis.line", detail: model.settings.history.enabled ? "記録する" : "記録しない")
+                Section("情報・センサー") {
+                    link(.weather, "天気・環境情報", "cloud.sun.fill", .orange)
+                    link(.sensors, "センサー情報", "gyroscope", .mint)
+                    link(.headTracking, "頭の動き（ヘッドトラッキング）", "move.3d", .cyan, detail: model.settings.headTracking.source.displayName)
+                    link(.heartRate, "心拍計（Bluetooth）", "heart.fill", .red, detail: model.settings.bluetooth.heartRateEnabled ? model.heartRate.state.displayName : "オフ")
+                    link(.history, "履歴・分析", "chart.xyaxis.line", .blue, detail: model.settings.history.enabled ? "記録する" : "記録しない")
                 }
                 Section("データ") {
-                    link(.sync, "データ・同期", "arrow.triangle.2.circlepath")
-                    link(.privacy, "プライバシー・通信ログ", "hand.raised")
-                    link(.shortcuts, "ショートカット", "square.on.square")
+                    link(.sync, "データ・同期", "arrow.triangle.2.circlepath", .green)
+                    link(.privacy, "プライバシー・通信ログ", "hand.raised.fill", .blue)
+                    link(.shortcuts, "ショートカット", "square.on.square", .indigo)
                 }
                 Section("その他") {
-                    link(.advanced, "詳細・診断", "wrench.and.screwdriver")
-                    link(.deviceTest, "実機テストモード", "checklist")
-                    link(.about, "このアプリについて・安全", "info.circle")
+                    link(.advanced, "詳細・診断", "wrench.and.screwdriver.fill", .gray)
+                    link(.deviceTest, "実機テストモード", "checklist", .orange)
+                    link(.about, "このアプリについて・安全", "info.circle.fill", .gray)
                 }
             }
+            .appBackground()
             .navigationTitle("設定")
             .navigationDestination(for: SettingsRoute.self) { route in
                 destination(route)
+                    .appBackground()
             }
         }
     }
 
-    private func link(_ route: SettingsRoute, _ title: String, _ icon: String, detail: String? = nil) -> some View {
+    private func link(_ route: SettingsRoute, _ title: String, _ icon: String, _ color: Color, detail: String? = nil) -> some View {
         NavigationLink(value: route) {
-            HStack {
-                Label(title, systemImage: icon)
+            HStack(spacing: 12) {
+                SettingsIcon(systemImage: icon, color: color)
+                Text(title)
                 Spacer()
-                if let detail { Text(detail).foregroundStyle(.secondary).font(.subheadline) }
+                if let detail { Text(detail).foregroundStyle(.secondary).font(.subheadline).lineLimit(1) }
             }
+            .padding(.vertical, 2)
         }
     }
 

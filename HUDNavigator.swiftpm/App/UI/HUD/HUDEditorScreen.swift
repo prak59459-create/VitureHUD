@@ -34,7 +34,11 @@ struct HUDEditorScreen: View {
                     }
                 }
                 .padding()
+                .padding(.bottom, 90)
+                .frame(maxWidth: 980)
+                .frame(maxWidth: .infinity)
             }
+            .appBackground()
             .navigationTitle("HUD")
             .toolbar {
                 ToolbarItemGroup(placement: .topBarTrailing) {
@@ -59,10 +63,7 @@ struct HUDStatusBar: View {
                         Button {
                             model.applyPreset(preset.id)
                         } label: {
-                            Label(preset.name, systemImage: preset.symbol)
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 8)
-                                .background(preset.id == model.activePresetID ? UIStyle.accent.opacity(0.25) : Color(.tertiarySystemFill), in: Capsule())
+                            SelectablePill(title: preset.name, systemImage: preset.symbol, isSelected: preset.id == model.activePresetID)
                         }
                         .buttonStyle(.plain)
                     }
@@ -92,7 +93,7 @@ struct HUDStatusBar: View {
                     } label: {
                         Label("全画面", systemImage: "arrow.up.left.and.arrow.down.right")
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.primaryCompact)
                 } else {
                     Label("グラスに表示中", systemImage: "eyeglasses").font(.footnote).foregroundStyle(.secondary)
                 }
@@ -110,8 +111,9 @@ struct EditorCanvas: View {
         let aspect = size.width / max(1, size.height)
         HUDRootView(surface: .editorPreview)
             .aspectRatio(aspect, contentMode: .fit)
-            .clipShape(RoundedRectangle(cornerRadius: 10))
-            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.gray.opacity(0.4)))
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(UIStyle.accent.opacity(0.35), lineWidth: 1))
+            .shadow(color: UIStyle.accent.opacity(0.15), radius: 16, y: 4)
             .overlay(alignment: .bottomTrailing) {
                 Text("グラスの画面（\(Int(size.width))×\(Int(size.height))）")
                     .font(.caption2)
@@ -133,6 +135,8 @@ struct EditorToolbar: View {
                 }
             } label: {
                 Label("追加", systemImage: "plus.circle.fill")
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.black)
             }
             .buttonStyle(.borderedProminent)
 
