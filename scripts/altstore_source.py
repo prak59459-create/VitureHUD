@@ -17,6 +17,29 @@ import sys
 TINT = "00E5FF"
 
 
+def image_size(path):
+    """PNG・JPEG の幅と高さ（読めなければ None）"""
+    with open(path, "rb") as f:
+        data = f.read()
+    if data[:8] == b"\x89PNG\r\n\x1a\n":
+        return struct.unpack(">II", data[16:24])
+    if data[:2] == b"\xff\xd8":
+        i = 2
+        while i + 9 < len(data):
+            if data[i] != 0xFF:
+                i += 1
+                continue
+            marker = data[i + 1]
+            if marker in (0xC0, 0xC1, 0xC2):
+                height, width = struct.unpack(">HH", data[i + 5:i + 9])
+                return (width, height)
+            if marker in (0xD8, 0x01) or 0xD0 <= marker <= 0xD7:
+                i += 2
+                continue
+            i += 2 + struct.unpack(">H", data[i + 2:i + 4])[0]
+    return None
+
+
 def main() -> int:
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     widgets = "--widgets" in sys.argv
@@ -63,13 +86,10 @@ def main() -> int:
     # スクリーンショット：出力先にある screenshot-*.png（大きさは PNG のヘッダーから読む）
     screenshots = []
     out_dir = os.path.dirname(os.path.abspath(out_path))
-    for fname in sorted(f for f in os.listdir(out_dir) if f.startswith("screenshot-") and f.endswith(".png")):
-        with open(os.path.join(out_dir, fname), "rb") as f:
-            head = f.read(24)
-        if head[:8] != b"\x89PNG\r\n\x1a\n":
-            continue
-        width, height = struct.unpack(">II", head[16:24])
-        screenshots.append({"imageURL": f"{base}/{fname}", "width": width, "height": height})
+    for fname in sorted(f for f in os.listdir(out_dir) if f.startswith("screenshot-") and f.endswith((".png", ".jpg"))):
+        size_wh = image_size(os.path.join(out_dir, fname))
+        if size_wh:
+            screenshots.append({"imageURL": f"{base}/{fname}", "width": size_wh[0], "height": size_wh[1]})
 
     app = {
         "name": name,

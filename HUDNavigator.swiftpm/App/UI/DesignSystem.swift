@@ -253,11 +253,11 @@ struct ActionTile: View {
 
     var body: some View {
         Button(action: action) {
-            VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 12) {
                 Image(systemName: systemImage)
                     .font(.system(size: 17, weight: .semibold))
                     .foregroundStyle(isOn ? Color.black : UIStyle.accent)
-                    .frame(width: 38, height: 38)
+                    .frame(width: 40, height: 40)
                     .background(isOn ? UIStyle.accent : UIStyle.accent.opacity(0.14), in: Circle())
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
@@ -274,8 +274,9 @@ struct ActionTile: View {
                     }
                 }
             }
-            .padding(14)
-            .frame(maxWidth: .infinity, minHeight: 104, alignment: .topLeading)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 12)
+            .frame(maxWidth: .infinity, minHeight: 68, alignment: .leading)
             .cardSurface(radius: UIStyle.tileRadius, highlighted: isOn)
             .contentShape(RoundedRectangle(cornerRadius: UIStyle.tileRadius))
         }

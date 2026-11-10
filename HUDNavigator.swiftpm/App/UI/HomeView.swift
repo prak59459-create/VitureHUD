@@ -113,14 +113,12 @@ struct HeroCard: View {
                 .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(UIStyle.accent.opacity(0.35), lineWidth: 1))
                 .shadow(color: UIStyle.accent.opacity(0.18), radius: 18, y: 6)
-                .overlay(alignment: .topLeading) {
-                    HStack(spacing: 6) {
-                        StatusChip(text: model.activePreset.name, systemImage: model.activePreset.symbol)
-                        StatusChip(text: model.background.displayName, systemImage: model.background == .black ? "moon.fill" : "camera.fill", color: .white)
-                    }
-                    .padding(10)
-                }
                 .allowsHitTesting(false)
+
+            HStack(spacing: 6) {
+                StatusChip(text: model.activePreset.name, systemImage: model.activePreset.symbol)
+                StatusChip(text: model.background.displayName, systemImage: model.background == .black ? "moon.fill" : "camera.fill", color: .white)
+            }
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(display.statusDescription).font(.headline)

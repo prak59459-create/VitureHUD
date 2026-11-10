@@ -6,7 +6,7 @@ OUT="${1:-dist}"
 ASSETS=("$OUT"/HUDNavigator.ipa "$OUT"/HUDNavigator.swiftpm.zip)
 if [[ -f "$OUT/HUDNavigator-widgets.ipa" ]]; then ASSETS+=("$OUT/HUDNavigator-widgets.ipa"); fi
 # AltStore のソース・アイコン・スクリーンショット
-for f in "$OUT"/altstore-source*.json "$OUT"/icon.png "$OUT"/screenshot-*.png; do
+for f in "$OUT"/altstore-source*.json "$OUT"/icon.png "$OUT"/screenshot-*.png "$OUT"/screenshot-*.jpg; do
   [[ -f "$f" ]] && ASSETS+=("$f")
 done
 if [[ "${GITHUB_REF:-}" == refs/tags/v* ]]; then

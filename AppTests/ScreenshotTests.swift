@@ -3,7 +3,7 @@ import SwiftUI
 import UIKit
 @testable import HUDNavigator
 
-/// 端末側の操作画面を、実際の画面と同じように描いて PNG にする（アーティファクト「hud-snapshots」の ui-*.png）。
+/// 端末側の操作画面を、実際の画面と同じように描いて PNG にする（アーティファクト「hud-snapshots」の ui-*.jpg）。
 /// デザインの確認と、AltStore に載せるスクリーンショットに使う。
 @MainActor
 final class ScreenshotTests: XCTestCase {
@@ -48,11 +48,12 @@ final class ScreenshotTests: XCTestCase {
             window.drawHierarchy(in: window.bounds, afterScreenUpdates: true)
         }
         window.isHidden = true
-        let data = try XCTUnwrap(image.pngData())
+        // グラデーションの多い画面は PNG だと 5MB を超えるので JPEG にする
+        let data = try XCTUnwrap(image.jpegData(compressionQuality: 0.88))
         XCTAssertGreaterThan(data.count, 2000)
         if let dir = outputDirectory {
             try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-            try data.write(to: dir.appendingPathComponent("ui-\(name).png"))
+            try data.write(to: dir.appendingPathComponent("ui-\(name).jpg"))
         }
         let attachment = XCTAttachment(image: image)
         attachment.name = "ui-\(name)"

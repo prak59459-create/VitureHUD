@@ -74,18 +74,7 @@ struct HUDStatusBar: View {
                     ForEach(BackgroundMode.allCases, id: \.self) { Text($0.displayName).tag($0) }
                 }
                 .pickerStyle(.segmented)
-                .frame(maxWidth: 220)
-                Menu {
-                    ForEach(model.allThemes) { theme in
-                        Button {
-                            model.applyTheme(model.themeRef(theme))
-                        } label: {
-                            if model.activeTheme.id == theme.id { Label(theme.name, systemImage: "checkmark") } else { Text(theme.name) }
-                        }
-                    }
-                } label: {
-                    Label(model.activeTheme.name, systemImage: "paintpalette")
-                }
+                .frame(maxWidth: 200)
                 Spacer()
                 if model.display.mode != .independent {
                     Button {
@@ -95,8 +84,28 @@ struct HUDStatusBar: View {
                     }
                     .buttonStyle(.primaryCompact)
                 } else {
-                    Label("グラスに表示中", systemImage: "eyeglasses").font(.footnote).foregroundStyle(.secondary)
+                    StatusChip(text: "グラスに表示中", systemImage: "eyeglasses", color: UIStyle.success)
                 }
+            }
+            Menu {
+                ForEach(model.allThemes) { theme in
+                    Button {
+                        model.applyTheme(model.themeRef(theme))
+                    } label: {
+                        if model.activeTheme.id == theme.id { Label(theme.name, systemImage: "checkmark") } else { Text(theme.name) }
+                    }
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "paintpalette.fill")
+                    Text("テーマ：\(model.activeTheme.name)").lineLimit(1)
+                    Image(systemName: "chevron.down").font(.caption2.weight(.bold))
+                }
+                .font(.subheadline.weight(.medium))
+                .padding(.horizontal, 14)
+                .padding(.vertical, 9)
+                .background(UIStyle.fieldBackground, in: Capsule())
+                .overlay(Capsule().strokeBorder(UIStyle.cardStroke, lineWidth: 1))
             }
         }
     }
@@ -128,6 +137,7 @@ struct EditorToolbar: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
         HStack(spacing: 12) {
             Menu {
                 ForEach(WidgetKind.allCases, id: \.self) { kind in
@@ -137,6 +147,8 @@ struct EditorToolbar: View {
                 Label("追加", systemImage: "plus.circle.fill")
                     .fontWeight(.semibold)
                     .foregroundStyle(.black)
+                    .lineLimit(1)
+                    .fixedSize()
             }
             .buttonStyle(.borderedProminent)
 
@@ -169,6 +181,10 @@ struct EditorToolbar: View {
         }
         .labelStyle(.titleAndIcon)
         .font(.subheadline)
+        .lineLimit(1)
+        .fixedSize()
+        .padding(.vertical, 2)
+        }
     }
 }
 

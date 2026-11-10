@@ -15,7 +15,7 @@ struct SettingsScreen: View {
         NavigationStack(path: $model.settingsPath) {
             List {
                 Section("表示") {
-                    link(.display, "外部ディスプレイ（グラス）", "eyeglasses", .cyan, detail: model.display.mode.displayName)
+                    link(.display, "グラスの表示", "eyeglasses", .cyan, detail: model.display.mode.displayName)
                     link(.canvas, "表示位置・大きさ", "rectangle.dashed", .blue)
                     link(.themes, "テーマ", "paintpalette.fill", .purple, detail: model.activeTheme.name)
                     link(.presets, "プリセット", "square.stack.fill", .indigo, detail: model.activePreset.name)
