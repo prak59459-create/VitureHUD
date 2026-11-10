@@ -210,6 +210,25 @@ final class FeatureTests: XCTestCase {
         model.settings.headTracking = HeadTrackingSettings()
     }
 
+    func testScanMeshBuilderMakesTrianglesAndOBJ() {
+        let builder = MeshBuilder(voxelSize: 0.05)
+        var pts: [ColoredPoint] = []
+        for x in stride(from: Float(-0.5), through: 0.5, by: 0.02) {
+            for y in stride(from: Float(-0.5), through: 0.5, by: 0.02) {
+                pts.append(ColoredPoint(Point3(x, y, -1), r: 100, g: 150, b: 200))
+            }
+        }
+        let frame = SpatialScanner.FrameResult(cloud: pts, meshable: pts, origin: Point3(0, 0, 0))
+        for _ in 0..<3 { builder.integrate(frame, weight: 0.7) }
+        let mesh = builder.extract()
+        XCTAssertGreaterThan(mesh.triangleCount, 50, "壁の点から三角形のメッシュができる")
+        let obj = mesh.obj()
+        XCTAssertTrue(obj.contains("\nv "))
+        XCTAssertTrue(obj.contains("\nf "))
+        builder.reset(voxelSize: 0.08)
+        XCTAssertEqual(builder.extract().triangleCount, 0, "細かさを変えると作り直し")
+    }
+
     func testSuggestionAcceptRunsAction() async throws {
         model.background = .camera
         model.present(Suggestion(key: "test", title: "テスト", message: "黒背景にします", action: .setBackground(.black)))
