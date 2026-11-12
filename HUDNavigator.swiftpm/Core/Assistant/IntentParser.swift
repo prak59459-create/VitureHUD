@@ -37,6 +37,9 @@ public struct IntentParser: Sendable {
         // もう一度
         if has("もう一度", "もういちど", "繰り返して", "くりかえして", "なんて言った") { return .repeatGuidance }
 
+        // ワーク（計算・タイマー・やること・メモ・ブラウザ・台本）
+        if let work = Self.parseWork(raw: rawText, text: text, positive: positive, negative: negative) { return work }
+
         // 背景
         if has("背景", "はいけい", "バックグラウンド") || has("黒背景", "ブラック") {
             if has("黒", "くろ", "ブラック", "black") { return .setBackground(.black) }
@@ -183,13 +186,16 @@ public struct IntentParser: Sendable {
             if has("どっち", "方角", "ほうがく", "方位", "北はどっち") { return .status(.heading) }
         }
 
-        // ウィジェットの表示・非表示（「〇〇を表示して」「〇〇を消して」）
-        for kind in WidgetKind.allCases {
-            let names = Self.widgetAliases(kind).map { Self.normalize($0) }
-            if hasAny(names) {
-                if negative { return .hideWidget(kind) }
-                if positive { return .showWidget(kind) }
+        // ウィジェットの表示・非表示（「〇〇を表示して」「〇〇を消して」）。
+        // 「世界時計」と「時計」のように名前が重なるときは、長い名前を優先する
+        if positive || negative {
+            var best: (kind: WidgetKind, length: Int)?
+            for kind in WidgetKind.allCases {
+                for name in Self.widgetAliases(kind).map({ Self.normalize($0) }) where text.contains(name) {
+                    if best == nil || name.count > best!.length { best = (kind, name.count) }
+                }
             }
+            if let best { return negative ? .hideWidget(best.kind) : .showWidget(best.kind) }
         }
 
         // 画面
@@ -198,9 +204,208 @@ public struct IntentParser: Sendable {
             if has("履歴", "りれき") { return .open(.history) }
             if has("天気", "てんき") { return .open(.weather) }
             if has("ホーム", "ほーむ") { return .open(.home) }
+            if has("ワーク", "わーく", "デスク", "作業", "ブラウザ", "ウェブ") { return .open(.work) }
         }
 
         return .ask(rawText.trimmingCharacters(in: .whitespacesAndNewlines))
+    }
+
+    // MARK: - ワーク
+
+    /// デスクワーク向けの言い方（当てはまらなければ nil）
+    static func parseWork(raw: String, text: String, positive: Bool, negative: Bool) -> AppCommand? {
+        func has(_ words: String...) -> Bool { words.contains { text.contains($0) } }
+        let stops = has("止め", "とめ", "停止", "やめ", "キャンセル", "終了", "解除", "ストップ", "リセット")
+        let starts = has("開始", "かいし", "始め", "はじめ", "スタート", "再生", "流して", "進めて", "オン", "つけて")
+
+        // 計算（「128かける3は？」「(12+3)*4」）
+        if let expression = MathExpression.normalize(raw) { return .calculate(expression) }
+
+        // 集中タイマー（ポモドーロ）
+        if has("集中タイマー", "ポモドーロ", "ぽもどーろ") || (has("集中") && !has("モード", "プリセット") && (starts || stops)) {
+            if has("次へ", "スキップ", "飛ばし", "とばし") { return .skipFocus }
+            if stops || has("オフ", "消して") { return .setFocus(false) }
+            if starts { return .setFocus(true) }
+        }
+        if has("休憩") && has("スキップ", "飛ばし", "とばし", "終わり", "おわり") { return .skipFocus }
+
+        // ストップウォッチ
+        if has("ストップウォッチ") {
+            // 「ストップウォッチ」自体に「ストップ」が入っているので、取り除いてから見る
+            let rest = text.replacingOccurrences(of: "ストップウォッチ", with: "")
+            let stopWords = ["止め", "とめ", "停止", "やめ", "キャンセル", "終了", "ストップ", "リセット"]
+            if stopWords.contains(where: { rest.contains($0) }) { return .setStopwatch(false) }
+            if starts || has("計って", "測って", "はかって") { return .setStopwatch(true) }
+        }
+
+        // タイマー（「5分タイマー」「3分測って」「10分後に教えて」）
+        let duration = extractDuration(text)
+        if has("タイマー", "たいまー") && !has("集中", "ポモドーロ") {
+            if let duration { return .startTimer(seconds: duration) }
+            if stops { return .stopTimer }
+        }
+        if let duration, has("測って", "はかって", "計って", "たったら", "経ったら", "後に教え", "後におしえ", "後に知らせ", "後にしらせ", "後に呼んで") {
+            return .startTimer(seconds: duration)
+        }
+
+        // やること
+        if has("やること", "タスク", "todo", "トゥードゥー") {
+            if let title = extractTodoTitle(raw) { return .addTodo(title) }
+            if has("完了", "終わった", "おわった", "終わり", "済み", "済んだ", "できた", "チェック") {
+                return .completeTodo(extractCompletedTodo(raw) ?? "")
+            }
+        }
+
+        // メモ（「メモ、牛乳を買う」「牛乳を買うとメモして」）
+        if has("メモ", "めも"), let note = extractNote(raw) { return .addNote(note) }
+
+        // ブラウザ
+        if has("スクロール") || (has("ページ") && has("下に", "上に", "下へ", "上へ", "進んで", "送って")) {
+            return .webScroll(has("上に", "上へ", "うえに", "戻") ? .up : .down)
+        }
+        if has("ページ", "ブラウザ", "サイト") && has("戻って", "もどって", "戻る", "戻して") { return .webBack }
+        if has("ウェブ", "web", "ブラウザ", "ネットで", "インターネット", "ググ", "サイトを"), let query = extractWebQuery(raw) {
+            return .openWeb(query)
+        }
+
+        // 台本（プロンプター）
+        if has("台本", "だいほん", "プロンプター", "原稿") {
+            if has("止め", "とめ", "停止", "ストップ", "一時停止") { return .setTeleprompter(false) }
+            if has("再生", "開始", "スタート", "始め", "はじめ", "流して", "進めて", "読み") { return .setTeleprompter(true) }
+        }
+        return nil
+    }
+
+    /// 「5分」「1時間30分」「90秒」「3分半」を秒にする
+    static func extractDuration(_ text: String) -> Int? {
+        let chars = Array(text)
+        var total = 0
+        var found = false
+        var digits = ""
+        var i = 0
+        while i < chars.count {
+            let c = chars[i]
+            if c.isASCII, c.isNumber {
+                digits.append(c)
+                i += 1
+                continue
+            }
+            if let n = Int(digits) {
+                if c == "時", i + 1 < chars.count, chars[i + 1] == "間" {
+                    total += n * 3600
+                    found = true
+                    i += 1
+                } else if c == "分" {
+                    total += n * 60
+                    found = true
+                    if i + 1 < chars.count, chars[i + 1] == "半" {
+                        total += 30
+                        i += 1
+                    }
+                } else if c == "秒" {
+                    total += n
+                    found = true
+                }
+            }
+            digits = ""
+            i += 1
+        }
+        return found && total > 0 && total <= 24 * 3600 ? total : nil
+    }
+
+    /// 前後の空白・句読点を取り除く
+    static func tidy(_ text: String) -> String {
+        text.trimmingCharacters(in: CharacterSet(charactersIn: " \u{3000}、。,.:：!！?？「」\n"))
+    }
+
+    /// text から first より後・last より前を取り出す
+    static func between(_ text: String, after first: [String], before last: [String]) -> String? {
+        for a in first {
+            guard let start = text.range(of: a) else { continue }
+            let rest = text[start.upperBound...]
+            for b in last {
+                if let end = rest.range(of: b, options: .backwards) {
+                    let middle = tidy(String(rest[rest.startIndex..<end.lowerBound]))
+                    if !middle.isEmpty && middle.count <= 120 { return middle }
+                }
+            }
+        }
+        return nil
+    }
+
+    /// 「やることに牛乳を買うを追加」「牛乳を買うをタスクに追加して」「タスク追加 牛乳を買う」
+    static func extractTodoTitle(_ raw: String) -> String? {
+        let text = tidy(raw)
+        let lists = ["やることリスト", "やること", "タスクリスト", "タスク", "TODO", "ToDo", "todo", "Todo"]
+        let adds = ["を追加", "をついか", "追加", "を入れて", "をいれて", "を足して", "を登録", "と追加"]
+        // 「〇〇に △△ を追加」
+        if let title = between(text, after: lists.map { $0 + "に" }, before: adds) { return title }
+        // 「△△ を 〇〇に追加」
+        for list in lists {
+            for joiner in ["を", "って", "と", ""] {
+                let marker = joiner + list + "に"
+                if let r = text.range(of: marker), text[r.upperBound...].contains("追加") || text[r.upperBound...].contains("入れ") || text[r.upperBound...].contains("登録") {
+                    let title = tidy(String(text[text.startIndex..<r.lowerBound]))
+                    if !title.isEmpty && title.count <= 120 { return title }
+                }
+            }
+        }
+        // 「タスク追加 △△」
+        for list in lists {
+            for add in ["追加", "を追加", "に追加"] {
+                let marker = list + add
+                if text.hasPrefix(marker) {
+                    let title = tidy(String(text.dropFirst(marker.count)))
+                    if !title.isEmpty && title.count <= 120 && !["して", "する", "したい"].contains(title) { return title }
+                }
+            }
+        }
+        return nil
+    }
+
+    /// 「タスクの牛乳を完了」→ "牛乳"（名前がなければ nil）
+    static func extractCompletedTodo(_ raw: String) -> String? {
+        let text = tidy(raw)
+        let name = between(text, after: ["タスクの", "やることの"], before: ["を完了", "を終わり", "をおわり", "が終わった", "がおわった", "をチェック", "は終わった", "はできた"])
+        return name
+    }
+
+    /// 「メモ、牛乳を買う」「牛乳を買うとメモして」「メモに牛乳を追加」
+    static func extractNote(_ raw: String) -> String? {
+        let text = tidy(raw)
+        for suffix in ["とメモしておいて", "とメモしといて", "とメモして", "ってメモしておいて", "ってメモしといて", "ってメモして", "をメモしておいて", "をメモしといて", "をメモして", "をメモに追加して", "をメモに追加", "をメモに書いて", "とメモ", "をメモ"] {
+            if text.hasSuffix(suffix) {
+                let note = tidy(String(text.dropLast(suffix.count)))
+                if !note.isEmpty { return note }
+            }
+        }
+        if let note = between(text, after: ["メモに"], before: ["を追加", "と書いて", "って書いて", "を書いて", "と追加"]) { return note }
+        for prefix in ["メモしておいて", "メモしといて", "メモして", "メモを取って", "メモ取って", "メモ"] where text.hasPrefix(prefix) {
+            let rest = String(text.dropFirst(prefix.count))
+            // 「メモを表示」のような操作と区別するため、区切り（、・空白・：）が必要
+            guard let first = rest.first, "、,:： \u{3000}。".contains(first) else { continue }
+            let note = tidy(rest)
+            if !note.isEmpty { return note }
+        }
+        return nil
+    }
+
+    /// 「猫の動画をウェブで検索」「ブラウザで example.com を開いて」→ 検索語・アドレス
+    static func extractWebQuery(_ raw: String) -> String? {
+        var text = tidy(raw)
+        for tool in ["インターネットで", "ウェブサイトで", "ウェブで", "Webで", "webで", "WEBで", "ブラウザで", "ネットで", "サイトを", "ググって", "ググる"] {
+            text = text.replacingOccurrences(of: tool, with: "")
+        }
+        for suffix in ["を検索して", "を検索", "検索して", "を調べて", "をしらべて", "について調べて", "を開いて", "をひらいて", "を表示して", "を表示", "を見せて", "を", "で"] {
+            let t = tidy(text)
+            if t.hasSuffix(suffix) {
+                text = String(t.dropLast(suffix.count))
+                break
+            }
+        }
+        let query = tidy(text)
+        let generic: Set<String> = ["", "ブラウザ", "ウェブ", "ネット", "インターネット", "ページ", "サイト"]
+        return generic.contains(query) || query.count > 120 ? nil : query
     }
 
     static func moveDirection(_ text: String) -> MoveDirection? {
@@ -214,7 +419,7 @@ public struct IntentParser: Sendable {
     static func widgetAliases(_ kind: WidgetKind) -> [String] {
         switch kind {
         case .clock: return ["時計", "とけい"]
-        case .date: return ["日付", "ひづけ", "カレンダー"]
+        case .date: return ["日付", "ひづけ"]
         case .battery: return ["バッテリー", "電池"]
         case .speed: return ["速度", "そくど", "スピード", "速度計"]
         case .compass: return ["コンパス", "こんぱす", "方位"]
@@ -231,7 +436,7 @@ public struct IntentParser: Sendable {
         case .sensors: return ["センサー", "せんさー", "ジャイロ", "加速度"]
         case .assistant: return ["アシスタント", "あしすたんと"]
         case .detections: return ["検出結果", "検出表示"]
-        case .customText: return ["テキスト", "メモ"]
+        case .customText: return ["テキスト"]
         case .heartRate: return ["心拍", "しんぱく", "脈拍"]
         case .horizon: return ["水平器", "すいへいき", "水平"]
         case .hourlyForecast: return ["時間ごとの天気", "天気予報", "予報"]
@@ -239,6 +444,14 @@ public struct IntentParser: Sendable {
         case .steps: return ["歩数", "ほすう", "万歩計", "気圧"]
         case .headPose: return ["頭の向き", "あたまのむき"]
         case .distance: return ["距離計", "障害物", "きょり"]
+        case .notes: return ["メモ", "ノート"]
+        case .todo: return ["やること", "タスク", "todo", "やることリスト"]
+        case .focusTimer: return ["集中タイマー", "ポモドーロ"]
+        case .timer: return ["タイマー", "ストップウォッチ"]
+        case .calendar: return ["予定", "スケジュール", "カレンダー"]
+        case .webPage: return ["ブラウザ", "ウェブページ", "ウェブ"]
+        case .teleprompter: return ["台本", "プロンプター", "原稿"]
+        case .worldClock: return ["世界時計", "せかいどけい"]
         }
     }
 

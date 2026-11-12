@@ -2,7 +2,7 @@ import Foundation
 
 /// ウィジェットが動作に必要とするサービス。表示中のウィジェットだけサービスを起動する（省電力）。
 public enum WidgetRequirement: String, Codable, CaseIterable, Sendable {
-    case location, heading, motion, weather, navigation, camera, battery, assistant, alerts, bluetooth, pedometer, headTracking, depth
+    case location, heading, motion, weather, navigation, camera, battery, assistant, alerts, bluetooth, pedometer, headTracking, depth, calendar
 }
 
 public enum WidgetKind: String, Codable, CaseIterable, Sendable {
@@ -32,6 +32,15 @@ public enum WidgetKind: String, Codable, CaseIterable, Sendable {
     case steps
     case headPose
     case distance
+    // ワーク（デスクワーク・勉強・発表）
+    case notes
+    case todo
+    case focusTimer
+    case timer
+    case calendar
+    case webPage
+    case teleprompter
+    case worldClock
 
     public var displayName: String {
         switch self {
@@ -61,6 +70,14 @@ public enum WidgetKind: String, Codable, CaseIterable, Sendable {
         case .steps: return "歩数・気圧"
         case .headPose: return "頭の向き"
         case .distance: return "距離・障害物"
+        case .notes: return "メモ"
+        case .todo: return "やること"
+        case .focusTimer: return "集中タイマー"
+        case .timer: return "タイマー・ストップウォッチ"
+        case .calendar: return "今日の予定"
+        case .webPage: return "ブラウザ"
+        case .teleprompter: return "台本（プロンプター）"
+        case .worldClock: return "世界時計"
         }
     }
 
@@ -93,6 +110,14 @@ public enum WidgetKind: String, Codable, CaseIterable, Sendable {
         case .steps: return "shoeprints.fill"
         case .headPose: return "rotate.3d"
         case .distance: return "ruler"
+        case .notes: return "note.text"
+        case .todo: return "checklist"
+        case .focusTimer: return "timer"
+        case .timer: return "stopwatch"
+        case .calendar: return "calendar.day.timeline.left"
+        case .webPage: return "globe"
+        case .teleprompter: return "text.alignleft"
+        case .worldClock: return "globe.asia.australia"
         }
     }
 
@@ -116,6 +141,8 @@ public enum WidgetKind: String, Codable, CaseIterable, Sendable {
         case .steps: return [.pedometer]
         case .headPose: return [.headTracking]
         case .distance: return [.depth]
+        case .notes, .todo, .focusTimer, .timer, .webPage, .teleprompter, .worldClock: return []
+        case .calendar: return [.calendar]
         }
     }
 
@@ -146,6 +173,51 @@ public enum WidgetKind: String, Codable, CaseIterable, Sendable {
         case .steps: return (0.16, 0.10)
         case .headPose: return (0.14, 0.14)
         case .distance: return (0.18, 0.12)
+        case .notes: return (0.26, 0.34)
+        case .todo: return (0.24, 0.30)
+        case .focusTimer: return (0.18, 0.14)
+        case .timer: return (0.16, 0.12)
+        case .calendar: return (0.26, 0.26)
+        case .webPage: return (0.56, 0.62)
+        case .teleprompter: return (0.60, 0.26)
+        case .worldClock: return (0.20, 0.16)
+        }
+    }
+}
+
+/// ウィジェットの分類（追加メニューの見出し）
+public enum WidgetCategory: String, CaseIterable, Sendable {
+    case basic, work, navigation, environment, sensors, vision
+
+    public var displayName: String {
+        switch self {
+        case .basic: return "基本"
+        case .work: return "ワーク"
+        case .navigation: return "ナビ・移動"
+        case .environment: return "天気・環境"
+        case .sensors: return "体・センサー"
+        case .vision: return "カメラ・AI"
+        }
+    }
+}
+
+public extension WidgetKind {
+    var category: WidgetCategory {
+        switch self {
+        case .clock, .date, .battery, .notifications, .customText, .worldClock: return .basic
+        case .notes, .todo, .focusTimer, .timer, .calendar, .webPage, .teleprompter: return .work
+        case .speed, .compass, .miniMap, .tripDistance, .eta, .nextTurn, .gpsStatus, .nearbyPlaces: return .navigation
+        case .weather, .temperature, .precipitation, .airQuality, .hourlyForecast: return .environment
+        case .sensors, .heartRate, .horizon, .steps, .headPose: return .sensors
+        case .assistant, .detections, .distance: return .vision
+        }
+    }
+
+    /// 行をいくつも並べるウィジェット（文字の大きさをパネルの高さではなく画面全体から決める）
+    var isListStyle: Bool {
+        switch self {
+        case .notes, .todo, .calendar, .teleprompter, .webPage, .worldClock: return true
+        default: return false
         }
     }
 }

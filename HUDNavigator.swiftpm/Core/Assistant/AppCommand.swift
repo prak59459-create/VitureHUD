@@ -33,8 +33,10 @@ public enum StatusTopic: String, Codable, CaseIterable, Sendable {
     }
 }
 
-public enum AppScreen: String, Codable, CaseIterable, Sendable {
-    case home, hud, hudEditor, navigation, vision, assistant, settings, history, weather, scan3D
+public enum AppScreen: String, Codable, CaseIterable, Sendable, Identifiable {
+    case home, hud, hudEditor, navigation, vision, assistant, settings, history, weather, scan3D, work
+
+    public var id: String { rawValue }
 
     public var displayName: String {
         switch self {
@@ -48,6 +50,7 @@ public enum AppScreen: String, Codable, CaseIterable, Sendable {
         case .history: return "履歴"
         case .weather: return "天気"
         case .scan3D: return "3Dスキャン"
+        case .work: return "ワーク"
         }
     }
 }
@@ -177,6 +180,27 @@ public enum AppCommand: Hashable, Sendable {
     case setDepth(Bool)
     /// 正面の物までの距離を読み上げる
     case measureDistance
+    // ワーク（デスクワーク・勉強・発表）
+    /// 集中タイマー（ポモドーロ）
+    case setFocus(Bool)
+    /// 集中タイマーの今の区切りを飛ばす
+    case skipFocus
+    /// カウントダウンのタイマー（秒）
+    case startTimer(seconds: Int)
+    case stopTimer
+    case setStopwatch(Bool)
+    case addTodo(String)
+    /// やることを終わりにする（空文字ならいちばん上）
+    case completeTodo(String)
+    /// メモに 1 行足す
+    case addNote(String)
+    /// ブラウザで開く（アドレスか検索語）
+    case openWeb(String)
+    case webScroll(AdjustDirection)
+    case webBack
+    /// 台本（プロンプター）の再生・停止
+    case setTeleprompter(Bool)
+    case calculate(String)
     case cancel
     /// 定型コマンドに当てはまらない質問（AIアシスタントへ）
     case ask(String)
@@ -223,6 +247,19 @@ public enum AppCommand: Hashable, Sendable {
         case .setGlanceMode(let on): return on ? "下を見たときだけ詳しく表示" : "常に詳しく表示"
         case .setDepth(let on): return on ? "距離の推定をオン" : "距離の推定をオフ"
         case .measureDistance: return "正面までの距離"
+        case .setFocus(let on): return on ? "集中タイマーを開始" : "集中タイマーを終了"
+        case .skipFocus: return "集中タイマーを次へ"
+        case .startTimer(let s): return "タイマー \(HUDFormat.spokenSeconds(Double(s)))"
+        case .stopTimer: return "タイマーを止める"
+        case .setStopwatch(let on): return on ? "ストップウォッチを開始" : "ストップウォッチを止める"
+        case .addTodo: return "やることを追加"
+        case .completeTodo: return "やることを完了"
+        case .addNote: return "メモに追記"
+        case .openWeb(let q): return "ブラウザで「\(q)」を開く"
+        case .webScroll(let d): return d == .up ? "ページを上へ" : "ページを下へ"
+        case .webBack: return "前のページに戻る"
+        case .setTeleprompter(let on): return on ? "台本を再生" : "台本を止める"
+        case .calculate(let e): return "計算：\(e)"
         case .cancel: return "キャンセル"
         case .ask(let q): return "質問：\(q)"
         }

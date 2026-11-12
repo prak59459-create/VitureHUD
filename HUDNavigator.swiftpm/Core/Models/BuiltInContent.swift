@@ -1,6 +1,6 @@
 import Foundation
 
-/// 組み込みテーマ（7種）とプリセット（7種）。
+/// 組み込みテーマ（7種）とプリセット（12種）。
 /// UUID は固定値にして、端末間でエクスポート／インポートしても同じものとして扱えるようにする。
 public enum BuiltInContent {
     public static let defaultThemeKey = "apple"
@@ -268,13 +268,9 @@ public enum BuiltInContent {
                 id: UUID(uuidString: "00000000-0000-0000-0000-0000000000B5")!,
                 name: "デスクワーク",
                 symbol: "desktopcomputer",
-                layout: HUDLayout(name: "デスクワーク", panels: [
-                    panel(.clock, 0.80, 0.04, 0.16, 0.10, config: WidgetConfig(showsSeconds: true)),
-                    panel(.notifications, 0.62, 0.86, 0.34, 0.10),
-                    panel(.battery, 0.04, 0.88),
-                ]),
-                themeRef: "minimal",
-                features: FeatureToggles(voiceGuidance: false, reduceWhileMoving: false),
+                layout: HUDLayout(name: "デスクワーク", panels: deskPanels()),
+                themeRef: "apple",
+                features: workFeatures,
                 isBuiltIn: true,
                 key: "desk"
             ),
@@ -303,7 +299,123 @@ public enum BuiltInContent {
                 isBuiltIn: true,
                 key: "custom"
             ),
+            Preset(
+                id: UUID(uuidString: "00000000-0000-0000-0000-0000000000B8")!,
+                name: "ブラウザ",
+                symbol: "globe",
+                layout: HUDLayout(name: "ブラウザ", panels: [
+                    panel(.webPage, 0.14, 0.10, 0.72, 0.80),
+                    panel(.clock, 0.03, 0.03, 0.10, 0.07),
+                    panel(.battery, 0.87, 0.03, 0.10, 0.07, config: WidgetConfig(showsLabel: false)),
+                ]),
+                themeRef: "apple",
+                features: workFeatures,
+                isBuiltIn: true,
+                key: "browser"
+            ),
+            Preset(
+                id: UUID(uuidString: "00000000-0000-0000-0000-0000000000B9")!,
+                name: "発表・会議",
+                symbol: "person.wave.2",
+                layout: HUDLayout(name: "発表・会議", panels: [
+                    panel(.teleprompter, 0.18, 0.05, 0.64, 0.30),
+                    panel(.timer, 0.04, 0.05, 0.13, 0.11),
+                    panel(.clock, 0.84, 0.05, 0.12, 0.09),
+                    panel(.notes, 0.04, 0.56, 0.24, 0.36),
+                ]),
+                themeRef: "apple",
+                features: workFeatures,
+                isBuiltIn: true,
+                key: "presentation"
+            ),
+            Preset(
+                id: UUID(uuidString: "00000000-0000-0000-0000-0000000000BA")!,
+                name: "集中・勉強",
+                symbol: "timer",
+                layout: HUDLayout(name: "集中・勉強", panels: [
+                    panel(.focusTimer, 0.40, 0.04, 0.20, 0.15),
+                    panel(.todo, 0.04, 0.28, 0.22, 0.36),
+                    panel(.notes, 0.74, 0.28, 0.22, 0.36),
+                    panel(.clock, 0.84, 0.04, 0.12, 0.09),
+                ]),
+                themeRef: "minimal",
+                features: workFeatures,
+                isBuiltIn: true,
+                key: "focus"
+            ),
+            Preset(
+                id: UUID(uuidString: "00000000-0000-0000-0000-0000000000BB")!,
+                name: "運動",
+                symbol: "figure.run",
+                layout: HUDLayout(name: "運動", panels: [
+                    panel(.heartRate, 0.04, 0.04, 0.14, 0.11),
+                    panel(.timer, 0.42, 0.04, 0.16, 0.12),
+                    panel(.speed, 0.82, 0.04, 0.14, 0.13),
+                    panel(.tripDistance, 0.04, 0.84, 0.15, 0.10),
+                    panel(.steps, 0.24, 0.84, 0.17, 0.10),
+                    panel(.clock, 0.84, 0.86, 0.12, 0.09),
+                ]),
+                themeRef: "navigation",
+                features: FeatureToggles(voiceGuidance: false, reduceWhileMoving: false),
+                isBuiltIn: true,
+                key: "workout"
+            ),
+            Preset(
+                id: UUID(uuidString: "00000000-0000-0000-0000-0000000000BC")!,
+                name: "料理・家事",
+                symbol: "frying.pan",
+                layout: HUDLayout(name: "料理・家事", panels: [
+                    panel(.timer, 0.04, 0.04, 0.20, 0.15),
+                    panel(.clock, 0.42, 0.04, 0.16, 0.10),
+                    panel(.notes, 0.72, 0.04, 0.24, 0.50),
+                    panel(.todo, 0.04, 0.56, 0.22, 0.36),
+                ]),
+                themeRef: "apple",
+                features: workFeatures,
+                isBuiltIn: true,
+                key: "kitchen"
+            ),
         ]
+    }
+
+    /// 机で使うプリセット：音声案内なし・移動中の省略なし（位置情報を使わない）
+    static let workFeatures = FeatureToggles(voiceGuidance: false, reduceWhileMoving: false)
+
+    /// デスクワーク：中央は空けて（実際の画面や手元が見えるように）、左右に並べる
+    static func deskPanels() -> [HUDPanel] {
+        [
+            panel(.focusTimer, 0.04, 0.04, 0.18, 0.13),
+            panel(.todo, 0.04, 0.20, 0.22, 0.34),
+            panel(.clock, 0.82, 0.04, 0.14, 0.09),
+            panel(.calendar, 0.74, 0.16, 0.22, 0.28),
+            panel(.notes, 0.74, 0.47, 0.22, 0.36),
+            panel(.notifications, 0.33, 0.87, 0.34, 0.09),
+            panel(.battery, 0.04, 0.88, 0.11, 0.07),
+        ]
+    }
+
+    /// 以前の「デスクワーク」（時計・通知・電池だけ）のまま変えていなければ true。新しい配置に入れ替えてよい。
+    public static func isLegacyDeskLayout(_ layout: HUDLayout) -> Bool {
+        layout.panels.count == 3 && Set(layout.panels.map(\.widget)) == [.clock, .notifications, .battery]
+    }
+
+    /// プリセットの短い説明（選ぶ画面に出す）
+    public static func presetDescription(key: String?) -> String {
+        switch key {
+        case "walkNav": return "曲がり角・到着時刻・地図"
+        case "travel": return "天気・方位・地図で街歩き"
+        case "daily": return "時計・天気・通知"
+        case "info": return "天気や端末の情報を一覧"
+        case "desk": return "やること・予定・メモ・集中タイマー"
+        case "minimal": return "時計と曲がり角だけ"
+        case "custom": return "自由に作るための白紙"
+        case "browser": return "ウェブページを大きく表示"
+        case "presentation": return "台本・タイマー・メモ"
+        case "focus": return "ポモドーロで集中"
+        case "workout": return "心拍・速度・距離・歩数"
+        case "kitchen": return "タイマーとレシピのメモ"
+        default: return "自分で作ったプリセット"
+        }
     }
 
     /// 音声コマンドで使うプリセット名の別名。
@@ -315,6 +427,11 @@ public enum BuiltInContent {
         "desk": ["デスクワーク", "デスク", "仕事", "作業"],
         "minimal": ["ミニマル", "みにまる", "シンプル"],
         "custom": ["カスタム", "かすたむ"],
+        "browser": ["ブラウザ", "ウェブ", "ネット閲覧"],
+        "presentation": ["発表", "プレゼン", "会議", "スピーチ"],
+        "focus": ["集中", "勉強", "読書"],
+        "workout": ["運動", "ランニング", "ワークアウト", "トレーニング", "ジョギング"],
+        "kitchen": ["料理", "キッチン", "家事"],
     ]
 
     public static let themeAliases: [String: [String]] = [

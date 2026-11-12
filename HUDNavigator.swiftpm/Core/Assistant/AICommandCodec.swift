@@ -39,6 +39,15 @@ public enum AICommandCodec {
         - cyclePreset / 1 | -1
         - nextTheme, autoArrange, repeatGuidance, startHUD, stopHUD, syncNow, connectHeartRate, recenterHead, measureDistance / （値なし）
         - status / time | date | battery | speed | eta | remainingDistance | weather | location | heading
+        - setFocus, setStopwatch, setTeleprompter / true | false
+        - startTimer / 秒数（例: 300）
+        - stopTimer, skipFocus, webBack / （値なし）
+        - addTodo / やることの名前
+        - completeTodo / やることの名前（空ならいちばん上）
+        - addNote / メモに足す 1 行
+        - openWeb / アドレスか検索語
+        - webScroll / up | down
+        - calculate / 式（例: 12*(3+4)）
         コマンドは最大\(maxCommands)個まで。安全のため、運転に関わる操作の依頼には応じないでください。
         """
     }
@@ -120,6 +129,19 @@ public enum AICommandCodec {
         case "setDepth": return bool(v).map(AppCommand.setDepth)
         case "measureDistance": return .measureDistance
         case "status": return StatusTopic(rawValue: v).map(AppCommand.status)
+        case "setFocus": return bool(v).map(AppCommand.setFocus)
+        case "skipFocus": return .skipFocus
+        case "setStopwatch": return bool(v).map(AppCommand.setStopwatch)
+        case "setTeleprompter": return bool(v).map(AppCommand.setTeleprompter)
+        case "startTimer": return Int(v).flatMap { $0 > 0 && $0 <= 86_400 ? .startTimer(seconds: $0) : nil }
+        case "stopTimer": return .stopTimer
+        case "addTodo": return v.isEmpty || v.count > 120 ? nil : .addTodo(v)
+        case "completeTodo": return v.count > 120 ? nil : .completeTodo(v)
+        case "addNote": return v.isEmpty || v.count > 300 ? nil : .addNote(v)
+        case "openWeb": return v.isEmpty || v.count > 300 ? nil : .openWeb(v)
+        case "webScroll": return adjust(v).map(AppCommand.webScroll)
+        case "webBack": return .webBack
+        case "calculate": return MathExpression.evaluate(v) != nil ? .calculate(v) : nil
         default: return nil
         }
     }
@@ -179,6 +201,27 @@ public enum DeepLink {
             case "full": return .setGlanceMode(false)
             default: return nil
             }
+        case "focus":
+            if first == "stop" || first == "off" { return .setFocus(false) }
+            if first == "skip" { return .skipFocus }
+            return .setFocus(true)
+        case "timer":
+            if first == "stop" { return .stopTimer }
+            if let seconds = Int(first), seconds > 0, seconds <= 86_400 { return .startTimer(seconds: seconds) }
+            if let minutes = q("minutes").flatMap(Int.init), minutes > 0, minutes <= 1440 { return .startTimer(seconds: minutes * 60) }
+            return .open(.work)
+        case "todo":
+            if let title = q("add"), !title.isEmpty { return .addTodo(String(title.prefix(120))) }
+            if first == "done" { return .completeTodo("") }
+            return .open(.work)
+        case "note":
+            if let text = q("add"), !text.isEmpty { return .addNote(String(text.prefix(300))) }
+            return .open(.work)
+        case "web":
+            if let target = q("q") ?? q("url"), !target.isEmpty { return .openWeb(String(target.prefix(300))) }
+            return .open(.work)
+        case "work":
+            return .open(.work)
         case "guidance":
             if first == "on" { return .setVoiceGuidance(true) }
             if first == "off" { return .setVoiceGuidance(false) }

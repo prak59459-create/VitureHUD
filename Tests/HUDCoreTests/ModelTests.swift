@@ -127,7 +127,9 @@ final class CodableCompatibilityTests: XCTestCase {
 final class BuiltInContentTests: XCTestCase {
     func testSevenThemesAndPresets() {
         XCTAssertEqual(BuiltInContent.themes.count, 7)
-        XCTAssertEqual(BuiltInContent.makePresets().count, 7)
+        XCTAssertEqual(BuiltInContent.makePresets().count, 12)
+        XCTAssertEqual(Set(BuiltInContent.makePresets().map(\.id)).count, 12)
+        XCTAssertEqual(Set(BuiltInContent.makePresets().compactMap(\.key)), Set(BuiltInContent.presetAliases.keys))
         XCTAssertEqual(Set(BuiltInContent.themes.map(\.id)).count, 7)
     }
 
