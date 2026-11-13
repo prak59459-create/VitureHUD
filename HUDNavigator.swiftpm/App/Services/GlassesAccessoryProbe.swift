@@ -230,7 +230,8 @@ final class GlassesAccessoryProbe {
                 bytes.append(contentsOf: UnsafeRawBufferPointer(start: start, count: length))
             }
             guard !bytes.isEmpty else { return }
-            Task { @MainActor in self?.received(bytes, from: "MIDI") }
+            let received = bytes
+            Task { @MainActor in self?.received(received, from: "MIDI") }
         }
         guard portStatus == noErr else { return }
         connectMIDISources()

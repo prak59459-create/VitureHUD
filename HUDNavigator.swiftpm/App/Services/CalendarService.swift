@@ -113,20 +113,23 @@ final class CalendarService {
         guard let end = calendar.date(byAdding: .day, value: 2, to: startOfDay) else { return }
         let predicate = store.predicateForEvents(withStart: startOfDay, end: end, calendars: nil)
         let found = store.events(matching: predicate)
-        events = found
-            .filter { $0.status != .canceled }
-            .map { e in
-                AgendaEvent(
-                    id: "\(e.eventIdentifier ?? UUID().uuidString)-\(e.startDate.timeIntervalSince1970)",
-                    title: (e.title ?? "").isEmpty ? "（題名なし）" : e.title,
-                    start: e.startDate,
-                    end: e.endDate,
-                    isAllDay: e.isAllDay,
-                    location: (e.location ?? "").isEmpty ? nil : e.location,
-                    calendarName: e.calendar?.title ?? ""
-                )
-            }
-            .sorted { $0.start == $1.start ? $0.title < $1.title : $0.start < $1.start }
+        var list: [AgendaEvent] = []
+        for e in found where e.status != .canceled {
+            guard let start = e.startDate, let end = e.endDate else { continue }
+            let title: String = e.title ?? ""
+            let location: String = e.location ?? ""
+            let identifier: String = e.eventIdentifier ?? UUID().uuidString
+            list.append(AgendaEvent(
+                id: "\(identifier)-\(start.timeIntervalSince1970)",
+                title: title.isEmpty ? "（題名なし）" : title,
+                start: start,
+                end: end,
+                isAllDay: e.isAllDay,
+                location: location.isEmpty ? nil : location,
+                calendarName: e.calendar?.title ?? ""
+            ))
+        }
+        events = list.sorted { $0.start == $1.start ? $0.title < $1.title : $0.start < $1.start }
         lastUpdated = now
     }
 

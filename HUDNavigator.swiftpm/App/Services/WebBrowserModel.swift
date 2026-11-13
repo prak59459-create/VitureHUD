@@ -180,8 +180,9 @@ final class WebBrowserModel: NSObject {
         if (field) { field.focus(); return 'text'; }
         return 'other';
         """
-        run(script, ["nx": cursor.x, "ny": cursor.y]) { [weak self] value in
-            Task { @MainActor in self?.isTextFieldFocused = (value as? String) == "text" }
+        run(script, ["nx": Double(cursor.x), "ny": Double(cursor.y)]) { [weak self] value in
+            let isText = (value as? String) == "text"
+            Task { @MainActor in self?.isTextFieldFocused = isText }
         }
     }
 
@@ -239,10 +240,9 @@ final class WebBrowserModel: NSObject {
         run(Self.darkBody, ["on": darkMode, "css": Self.darkCSS])
     }
 
+    /// パソコン用・スマホ用の切り替えは、ページを開くたびに指定する（下の decidePolicyFor）。切り替えたら読み込み直す
     private func applyContentMode(reload: Bool) {
-        guard let webView else { return }
-        webView.configuration.defaultWebpagePreferences.preferredContentMode = desktopMode ? .desktop : .recommended
-        if reload, hasLoaded { webView.reload() }
+        if reload, hasLoaded { webView?.reload() }
     }
 
     fileprivate func pageStarted() {
@@ -278,6 +278,11 @@ extension WebBrowserModel: WKNavigationDelegate, WKUIDelegate {
 
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
         pageFailed(error)
+    }
+
+    func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, preferences: WKWebpagePreferences) async -> (WKNavigationActionPolicy, WKWebpagePreferences) {
+        preferences.preferredContentMode = desktopMode ? .desktop : .recommended
+        return (.allow, preferences)
     }
 
     /// 新しいウインドウで開くリンクは、同じ画面で開く
