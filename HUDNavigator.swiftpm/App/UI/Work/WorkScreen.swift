@@ -114,7 +114,7 @@ struct HUDWidgetChip: View {
         } label: {
             HStack(spacing: 6) {
                 Image(systemName: shown ? "eye.fill" : "eye.slash")
-                Text(shown ? "HUD に表示中：\(kind.displayName)" : "HUD に表示：\(kind.displayName)").lineLimit(1)
+                Text("HUD：\(kind.shortName)").lineLimit(1)
             }
             .font(.footnote.weight(.semibold))
             .foregroundStyle(shown ? Color.black : UIStyle.accent)
@@ -123,7 +123,44 @@ struct HUDWidgetChip: View {
             .background(shown ? UIStyle.accent : UIStyle.accent.opacity(0.14), in: Capsule())
         }
         .buttonStyle(.plain)
+        .fixedSize()
         .sensoryFeedback(.selection, trigger: shown)
+        .accessibilityLabel(shown ? "\(kind.displayName)を HUD に表示中" : "\(kind.displayName)を HUD に表示する")
+    }
+}
+
+/// 「HUD に表示」の切り替えを横に並べる（入りきらないときは横に送れる）
+struct HUDChipRow<Trailing: View>: View {
+    let kinds: [WidgetKind]
+    @ViewBuilder var trailing: Trailing
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(kinds, id: \.self) { HUDWidgetChip(kind: $0) }
+                trailing
+            }
+            .padding(.horizontal, 1)
+        }
+    }
+}
+
+extension HUDChipRow where Trailing == EmptyView {
+    init(kinds: [WidgetKind]) {
+        self.kinds = kinds
+        self.trailing = EmptyView()
+    }
+}
+
+extension WidgetKind {
+    /// ボタンに入る短い名前
+    var shortName: String {
+        switch self {
+        case .timer: return "タイマー"
+        case .teleprompter: return "台本"
+        case .calendar: return "予定"
+        default: return displayName
+        }
     }
 }
 
@@ -168,10 +205,7 @@ struct FocusSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             FocusTimerCard()
-            HStack(spacing: 8) {
-                HUDWidgetChip(kind: .focusTimer)
-                HUDWidgetChip(kind: .timer)
-            }
+            HUDChipRow(kinds: [.focusTimer, .timer])
             CountdownCard()
             StopwatchCard()
             FocusSettingsCard()
@@ -546,12 +580,11 @@ struct ScriptSection: View {
             .padding(16)
             .cardSurface(highlighted: work.prompter.isRunning)
 
-            HStack(spacing: 8) {
-                HUDWidgetChip(kind: .teleprompter)
+            HUDChipRow(kinds: [.teleprompter]) {
                 Button {
                     model.applyPreset(key: "presentation")
                 } label: {
-                    Label("発表のプリセットにする", systemImage: "person.wave.2").font(.footnote.weight(.semibold))
+                    Label("発表のシーンにする", systemImage: "person.wave.2").font(.footnote.weight(.semibold))
                 }
             }
 
@@ -581,10 +614,7 @@ struct AgendaSection: View {
     var body: some View {
         let calendar = model.calendar
         VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 8) {
-                HUDWidgetChip(kind: .calendar)
-                HUDWidgetChip(kind: .worldClock)
-            }
+            HUDChipRow(kinds: [.calendar, .worldClock])
             Card(title: "今日・明日の予定", systemImage: "calendar") {
                 switch calendar.access {
                 case .granted:

@@ -20,12 +20,11 @@ struct BrowserSection: View {
             } else {
                 livePage(browser)
             }
-            HStack(spacing: 8) {
-                HUDWidgetChip(kind: .webPage)
+            HUDChipRow(kinds: [.webPage]) {
                 Button {
                     model.applyPreset(key: "browser")
                 } label: {
-                    Label("ブラウザのプリセットにする", systemImage: "globe").font(.footnote.weight(.semibold))
+                    Label("ブラウザのシーンにする", systemImage: "globe").font(.footnote.weight(.semibold))
                 }
             }
             BrowserSettingsCard()

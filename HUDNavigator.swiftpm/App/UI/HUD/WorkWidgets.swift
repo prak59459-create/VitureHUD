@@ -399,6 +399,8 @@ struct TeleprompterWidget: View {
                             .font(t.bodyFont(40, weight: .semibold))
                             .lineLimit(1)
                             .fixedSize(horizontal: true, vertical: true)
+                            // 行が多くてもパネルの大きさは変えない（はみ出した分は切り取る）
+                            .frame(width: geo.size.width, height: geo.size.height, alignment: .topLeading)
                             // 今読んでいる行が、上から 3 割の位置に来るように送る
                             .offset(y: geo.size.height * 0.3 - CGFloat(linePosition - Double(first)) * lineHeight)
                         }
