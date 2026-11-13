@@ -16,7 +16,7 @@ cp Resources/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png "$OUT/icon.png"
 # スクリーンショット（シミュレータのテストで作った HUD の画像。なければスキップ）
 i=1
 rm -f "$OUT"/screenshot-*
-for name in ui-home.jpg ui-hud-editor.jpg ui-assistant-chat.jpg ui-settings.jpg preset-walkNav-1920x1080.png; do
+for name in ui-home.jpg ui-work-focus.jpg ui-hud-editor.jpg ui-work-browser-remote.jpg ui-assistant-chat.jpg preset-desk-1920x1080.png preset-walkNav-1920x1080.png; do
   if [[ -f "build/snapshots/$name" ]]; then
     cp "build/snapshots/$name" "$OUT/screenshot-$i.${name##*.}"
     i=$((i + 1))

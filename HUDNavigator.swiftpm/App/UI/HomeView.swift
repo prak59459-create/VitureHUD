@@ -16,9 +16,10 @@ struct HomeView: View {
                         QuickTiles()
                     }
                     VStack(alignment: .leading, spacing: 12) {
-                        SectionTitle(text: "プリセット", trailing: "編集") { model.selectedTab = .hud }
+                        SectionTitle(text: "シーン", trailing: "編集") { model.selectedTab = .hud }
                         PresetStrip()
                     }
+                    WorkSummaryCard()
                     NavigationSummaryCard()
                     VStack(alignment: .leading, spacing: 12) {
                         SectionTitle(text: "状態")
@@ -207,7 +208,57 @@ struct QuickTiles: View {
             ActionTile(title: "HUD を編集", subtitle: "配置・テーマ", systemImage: "slider.horizontal.3") {
                 model.selectedTab = .hud
             }
+            if model.isCompactLayout {
+                // iPhone ではタブに入りきらない画面をここから開く
+                ActionTile(title: "ビジョン", subtitle: "カメラ・物体認識", systemImage: "camera.viewfinder") {
+                    model.selectedTab = .vision
+                }
+                ActionTile(title: "アシスタント", subtitle: "会話・文字で操作", systemImage: "bubble.left.and.text.bubble.right.fill") {
+                    model.selectedTab = .assistant
+                }
+            }
         }
+    }
+}
+
+/// ワーク（集中・やること・メモ・ブラウザ）の今の状態と入口
+struct WorkSummaryCard: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        let work = model.workspace
+        let pending = work.data.pendingTodos
+        VStack(alignment: .leading, spacing: 12) {
+            SectionTitle(text: "ワーク", trailing: "開く") { model.selectedTab = .work }
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 12)], spacing: 12) {
+                TimelineView(.periodic(from: .now, by: 1)) { timeline in
+                    ActionTile(
+                        title: work.focus.isActive ? work.focus.phase.displayName : "集中タイマー",
+                        subtitle: work.focus.isActive
+                            ? (work.focus.isPaused ? "一時停止中" : "残り \(HUDFormat.timer(work.focus.remaining(at: timeline.date)))")
+                            : "\(Int(work.data.focus.workMinutes)) 分で始める",
+                        systemImage: "timer",
+                        isOn: work.focus.isRunning
+                    ) {
+                        work.toggleFocus()
+                    }
+                }
+                ActionTile(title: "やること", subtitle: pending.first?.title ?? "追加する", systemImage: "checklist", isOn: false) {
+                    open(.todo)
+                }
+                ActionTile(title: "メモ", subtitle: work.data.selectedNote?.displayTitle ?? "書く", systemImage: "note.text", isOn: false) {
+                    open(.notes)
+                }
+                ActionTile(title: "ブラウザ", subtitle: model.web.title.isEmpty ? "グラスでページを見る" : model.web.title, systemImage: "globe", isOn: model.isWidgetShown(.webPage)) {
+                    open(.browser)
+                }
+            }
+        }
+    }
+
+    private func open(_ section: WorkSection) {
+        model.workSection = section
+        model.selectedTab = .work
     }
 }
 
@@ -217,17 +268,18 @@ struct PresetStrip: View {
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
+            HStack(spacing: 10) {
                 ForEach(model.presets) { preset in
                     Button {
                         model.applyPreset(preset.id)
                     } label: {
-                        SelectablePill(title: preset.name, systemImage: preset.symbol, isSelected: preset.id == model.activePresetID)
+                        PresetCard(preset: preset, isSelected: preset.id == model.activePresetID)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(TilePressStyle())
                 }
             }
             .padding(.horizontal, 1)
+            .padding(.vertical, 2)
         }
     }
 }

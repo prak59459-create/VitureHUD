@@ -84,6 +84,19 @@ struct HUDTypography {
 
     var primary: Font { font(0.46) }
     var secondary: Font { font(0.22, weight: .medium) }
+
+    /// 行を並べるウィジェット（メモ・やること・予定など）の文字サイズ。
+    /// パネルの高さではなく画面全体の高さから決める（1080p 換算の px で指定）。パネルを広げると行数が増える。
+    func body(_ pixels: CGFloat) -> CGFloat {
+        let scale = canvasHeight / 1080
+        let base = pixels * scale * CGFloat(style.fontScale) * CGFloat(textScale)
+        let minimum = CGFloat(minimumFontPixels * textScale) * scale * min(1, pixels / 26)
+        return max(base, minimum, 6)
+    }
+
+    func bodyFont(_ pixels: CGFloat, weight: Font.Weight? = nil) -> Font {
+        .system(size: body(pixels), weight: weight ?? style.fontWeight.swiftUI, design: style.fontDesign.swiftUI)
+    }
 }
 
 /// 操作画面（端末側）で使う共通の見た目。
@@ -324,6 +337,39 @@ struct StatTile: View {
         .padding(.vertical, 12)
         .frame(maxWidth: .infinity, minHeight: 72, alignment: .leading)
         .cardSurface(radius: UIStyle.tileRadius)
+    }
+}
+
+/// プリセット（シーン）を選ぶカード
+struct PresetCard: View {
+    let preset: Preset
+    var isSelected: Bool
+    var compact = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Image(systemName: preset.symbol)
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(isSelected ? Color.black : UIStyle.accent)
+                .frame(width: 38, height: 38)
+                .background(isSelected ? UIStyle.accent : UIStyle.accent.opacity(0.14), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+            Text(preset.name)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+            if !compact {
+                Text(BuiltInContent.presetDescription(key: preset.key))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.leading)
+                    .lineLimit(2, reservesSpace: true)
+            }
+        }
+        .padding(12)
+        .frame(width: compact ? 124 : 152, alignment: .leading)
+        .cardSurface(radius: UIStyle.tileRadius, highlighted: isSelected)
+        .contentShape(RoundedRectangle(cornerRadius: UIStyle.tileRadius))
     }
 }
 

@@ -10,6 +10,8 @@ extension AppCommand {
         case .ask: return "AIへの質問"
         case .applyPreset: return "プリセットの切り替え"
         case .applyTheme: return "テーマの切り替え"
+        case .openWeb: return "ブラウザで開く"
+        case .calculate: return "計算"
         default: return summary
         }
     }

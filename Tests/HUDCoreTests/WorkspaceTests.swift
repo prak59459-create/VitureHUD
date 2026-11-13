@@ -70,6 +70,7 @@ final class WorkspaceTests: XCTestCase {
         XCTAssertEqual(WebAddress.resolve("東京.天気"), WebAddress.searchBase + WebAddress.percentEncode("東京.天気"))
         XCTAssertTrue(WebAddress.resolve("javascript:alert(1)")!.hasPrefix(WebAddress.searchBase))
         XCTAssertNil(WebAddress.resolve("   "))
+        XCTAssertEqual(WebAddress.resolve("about:blank"), "about:blank")
         XCTAssertEqual(WebAddress.display("https://www.example.com/"), "example.com")
         XCTAssertEqual(WebAddress.host("https://ja.wikipedia.org/wiki/X"), "ja.wikipedia.org")
     }

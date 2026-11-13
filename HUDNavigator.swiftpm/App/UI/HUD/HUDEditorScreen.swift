@@ -140,8 +140,12 @@ struct EditorToolbar: View {
         ScrollView(.horizontal, showsIndicators: false) {
         HStack(spacing: 12) {
             Menu {
-                ForEach(WidgetKind.allCases, id: \.self) { kind in
-                    Button { model.addWidget(kind) } label: { Label(kind.displayName, systemImage: kind.systemImage) }
+                ForEach(WidgetCategory.allCases, id: \.self) { category in
+                    Menu(category.displayName) {
+                        ForEach(WidgetKind.allCases.filter { $0.category == category }, id: \.self) { kind in
+                            Button { model.addWidget(kind) } label: { Label(kind.displayName, systemImage: kind.systemImage) }
+                        }
+                    }
                 }
             } label: {
                 Label("追加", systemImage: "plus.circle.fill")

@@ -3,18 +3,47 @@ import SwiftUI
 /// 端末側の画面。グラスに独立表示している間は「操作画面」になる。
 struct RootView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.horizontalSizeClass) private var sizeClass
 
     var body: some View {
         @Bindable var model = model
+        // iPhone（幅が狭い）ではタブを 5 つにして、ビジョン・アシスタントはホームから重ねて開く。
+        // iPad ではサイドバー・上のタブにすべて並ぶ。
+        let compact = sizeClass == .compact
         TabView(selection: $model.selectedTab) {
             Tab("ホーム", systemImage: "house", value: AppScreen.home) { HomeView() }
+            Tab("ワーク", systemImage: "desktopcomputer", value: AppScreen.work) { WorkScreen() }
             Tab("HUD", systemImage: "eyeglasses", value: AppScreen.hud) { HUDEditorScreen() }
             Tab("ナビ", systemImage: "map", value: AppScreen.navigation) { NavigationScreen() }
             Tab("ビジョン", systemImage: "viewfinder", value: AppScreen.vision) { VisionScreen() }
+                .hidden(compact)
             Tab("アシスタント", systemImage: "waveform", value: AppScreen.assistant) { AssistantScreen() }
+                .hidden(compact)
             Tab("設定", systemImage: "gearshape", value: AppScreen.settings) { SettingsScreen() }
         }
         .tabViewStyle(.sidebarAdaptable)
+        .onChange(of: compact, initial: true) { _, isCompact in
+            model.isCompactLayout = isCompact
+            // 画面を狭くしたとき、隠れるタブを開いていたら重ねて開き直す
+            if isCompact, model.selectedTab == .vision || model.selectedTab == .assistant {
+                let screen = model.selectedTab
+                model.selectedTab = .home
+                model.overlayScreen = screen
+            } else if !isCompact, let screen = model.overlayScreen {
+                model.overlayScreen = nil
+                model.selectedTab = screen
+            }
+        }
+        .sheet(item: $model.overlayScreen) { screen in
+            Group {
+                if screen == .assistant { AssistantScreen() } else { VisionScreen() }
+            }
+            .environment(model)
+            .tint(UIStyle.accent)
+            .fontDesign(.rounded)
+            .preferredColorScheme(.dark)
+            .presentationDragIndicator(.visible)
+        }
         // HUD と同じ「黒＋シアン」で統一（暗い所でもまぶしくない）
         .tint(UIStyle.accent)
         .fontDesign(.rounded)
@@ -88,6 +117,17 @@ struct KeyboardShortcutsLayer: View {
             shortcut(.leftArrow) { model.cyclePreset(-1) }
             shortcut("k") { model.speechInput.toggle() }
             shortcut("r") { Task { await model.perform(.repeatGuidance) } }
+            // ワーク：⌘T 集中タイマー、⌘L ブラウザ、⌘1〜5 でタブ
+            shortcut("t") { model.workspace.toggleFocus() }
+            shortcut("l") {
+                model.workSection = .browser
+                model.selectedTab = .work
+            }
+            shortcut("1") { model.selectedTab = .home }
+            shortcut("2") { model.selectedTab = .work }
+            shortcut("3") { model.selectedTab = .hud }
+            shortcut("4") { model.selectedTab = .navigation }
+            shortcut("5") { model.selectedTab = .settings }
         }
         .frame(width: 0, height: 0)
         .opacity(0)
@@ -103,19 +143,24 @@ struct FloatingMicButton: View {
     @Environment(AppModel.self) private var model
     var body: some View {
         let listening = model.speechInput.isListening
-        Button {
-            model.speechInput.toggle()
-        } label: {
-            Image(systemName: listening ? "waveform" : "mic.fill")
-                .font(.title2.weight(.semibold))
-                .foregroundStyle(.black)
-                .frame(width: 58, height: 58)
-                .background(listening ? Color.orange : UIStyle.accent, in: Circle())
-                .overlay(Circle().strokeBorder(.white.opacity(0.35), lineWidth: 1))
-                .shadow(color: (listening ? Color.orange : UIStyle.accent).opacity(0.55), radius: listening ? 18 : 12, y: 3)
-                .symbolEffect(.variableColor.iterative, isActive: listening)
-        }
-        .accessibilityLabel(listening ? "聞き取りを止める" : "音声で操作する")
+        // 軽く押す＝話しかける、長押し＝アシスタントの画面を開く
+        Image(systemName: listening ? "waveform" : "mic.fill")
+            .font(.title2.weight(.semibold))
+            .foregroundStyle(.black)
+            .frame(width: 58, height: 58)
+            .background(listening ? Color.orange : UIStyle.accent, in: Circle())
+            .overlay(Circle().strokeBorder(.white.opacity(0.35), lineWidth: 1))
+            .shadow(color: (listening ? Color.orange : UIStyle.accent).opacity(0.55), radius: listening ? 18 : 12, y: 3)
+            .symbolEffect(.variableColor.iterative, isActive: listening)
+            .contentShape(Circle())
+            .onTapGesture { model.speechInput.toggle() }
+            .onLongPressGesture(minimumDuration: 0.5) { model.selectedTab = .assistant }
+            .sensoryFeedback(.impact, trigger: listening)
+            .accessibilityElement()
+            .accessibilityAddTraits(.isButton)
+            .accessibilityLabel(listening ? "聞き取りを止める" : "音声で操作する")
+            .accessibilityHint("長押しでアシスタントの画面を開きます")
+            .accessibilityAction { model.speechInput.toggle() }
     }
 }
 

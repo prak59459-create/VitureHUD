@@ -51,9 +51,27 @@ final class SnapshotTests: XCTestCase {
 
     private let glasses = CGSize(width: 1920, height: 1080)
 
+    /// ワーク（やること・メモ・台本・タイマー）に見本のデータを入れる
+    private func seedWorkspace(_ model: AppModel) {
+        let work = model.workspace
+        work.data.todos = []
+        work.data.notes = []
+        for title in ["企画書の下書き", "見積もりを送る", "経費の精算", "会議室を予約"] { work.data.addTodo(title) }
+        work.data.completeNextTodo()
+        work.data.addNote(title: "打ち合わせ", text: "・来週までに試作\n・予算は 30 万円まで\n・次回は木曜 14 時")
+        work.data.script = "本日はお集まりいただきありがとうございます。\nこれから新しい取り組みについて、3 つの点をお話しします。\nまず 1 つ目は、これまでの結果です。\n次に、今後の計画をご説明します。"
+        work.startFocus()
+        work.startTimer(seconds: 180, label: "お茶")
+    }
+
     func testEveryPresetOnGlasses() throws {
         for preset in BuiltInContent.makePresets() {
             let model = makeModel(preset: preset.key!)
+            seedWorkspace(model)
+            defer {
+                model.workspace.stopFocus()
+                model.workspace.stopTimer()
+            }
             if preset.key == "walkNav" || preset.key == "travel" || preset.key == "minimal" { simulateNavigation(model) }
             try render(HUDRootView(surface: .thumbnail), model: model, size: glasses, name: "preset-\(preset.key!)-1920x1080")
         }
@@ -140,6 +158,30 @@ final class SnapshotTests: XCTestCase {
         model.settings.display.brightness = 0.5
         try render(HUDRootView(surface: .external), model: model, size: glasses, name: "brightness-50-minimal")
         model.settings.display = HUDDisplaySettings()
+    }
+
+    func testWorkWidgets() throws {
+        let model = makeModel(preset: "daily")
+        seedWorkspace(model)
+        defer {
+            model.workspace.stopFocus()
+            model.workspace.stopTimer()
+        }
+        var l = model.layout
+        l.panels = [
+            HUDPanel(widget: .focusTimer, frame: NormalizedRect(x: 0.03, y: 0.04, width: 0.2, height: 0.14), zIndex: 1),
+            HUDPanel(widget: .timer, frame: NormalizedRect(x: 0.25, y: 0.04, width: 0.16, height: 0.12), zIndex: 2),
+            HUDPanel(widget: .todo, frame: NormalizedRect(x: 0.03, y: 0.22, width: 0.24, height: 0.32), zIndex: 3),
+            HUDPanel(widget: .notes, frame: NormalizedRect(x: 0.03, y: 0.58, width: 0.24, height: 0.36), zIndex: 4),
+            HUDPanel(widget: .teleprompter, frame: NormalizedRect(x: 0.3, y: 0.22, width: 0.42, height: 0.3), zIndex: 5),
+            HUDPanel(widget: .webPage, frame: NormalizedRect(x: 0.3, y: 0.56, width: 0.42, height: 0.38), zIndex: 6),
+            HUDPanel(widget: .calendar, frame: NormalizedRect(x: 0.75, y: 0.04, width: 0.22, height: 0.26), zIndex: 7),
+            HUDPanel(widget: .worldClock, frame: NormalizedRect(x: 0.75, y: 0.34, width: 0.22, height: 0.18), zIndex: 8),
+        ]
+        model.layout = l
+        try render(HUDRootView(surface: .thumbnail), model: model, size: glasses, name: "widgets-work")
+        model.applyTheme("cyberpunk")
+        try render(HUDRootView(surface: .thumbnail), model: model, size: glasses, name: "widgets-work-cyberpunk")
     }
 
     func testVisibilityPattern() throws {

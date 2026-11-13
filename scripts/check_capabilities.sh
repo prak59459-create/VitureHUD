@@ -14,6 +14,7 @@ check NSMicrophoneUsageDescription microphone
 check NSSpeechRecognitionUsageDescription speechRecognition
 check NSMotionUsageDescription motion
 check NSBluetoothAlwaysUsageDescription bluetoothAlways
+check NSCalendarsFullAccessUsageDescription calendars
 # URL スキーム（ウィジェット・ショートカットから開く）は正式アプリのみ
 grep -q "hudnavigator" project.yml || { echo "::error::project.yml に URL スキームがありません"; status=1; }
 # Core は Foundation 以外を import しない（Linux でテストするため）

@@ -80,6 +80,18 @@ targets:
         NSSpeechRecognitionUsageDescription: 話した言葉を文字にして、アプリの操作に変換するために使います。
         NSMotionUsageDescription: 歩行・停止などの移動状態の推定と、センサー情報の表示に使います。
         NSBluetoothAlwaysUsageDescription: Bluetooth の心拍計から心拍数を受け取り、HUD に表示するために使います。
+        NSCalendarsFullAccessUsageDescription: 今日の予定を HUD に表示するために使います。予定は端末内でのみ使い、保存・送信しません。
+        # VITURE の公式アクセサリー（USB-C XR 充電アダプターなど）と公開 API（ExternalAccessory）で通信するための宣言。
+        # 通信の名前は VITURE が公開していないため推測（当たらなければ何も起きない）。診断で本当の名前が分かったら置き換える。
+        UISupportedExternalAccessoryProtocols:
+          - com.viture.xr
+          - com.viture.glasses
+          - com.viture.adapter
+          - com.viture.spacewalker
+          - com.viture.one
+          - com.viture.pro
+          - com.viture.imu
+          - com.viture.accessory
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: io.github.prak59459.hudnavigator

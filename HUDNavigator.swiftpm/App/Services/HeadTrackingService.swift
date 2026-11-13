@@ -417,6 +417,7 @@ final class HeadTrackingService {
 
     let ble = BLEIMUService()
     @ObservationIgnored let usb = GlassesUSBBridge()
+    let accessory = GlassesAccessoryProbe()
     @ObservationIgnored let face = FaceHeadTracker()
     @ObservationIgnored private var filter = HeadPoseFilter()
     @ObservationIgnored private var gestures = HeadGestureDetector()
@@ -437,6 +438,7 @@ final class HeadTrackingService {
             self.usbPackets = self.usb.packets
         }
         ble.onPose = { [weak self] p in self?.ingest(p) }
+        accessory.onPose = { [weak self] p in self?.ingest(p) }
         face.onPose = { [weak self] p in
             Task { @MainActor in
                 guard let self, self.activeSource == .frontCamera else { return }
@@ -489,6 +491,9 @@ final class HeadTrackingService {
             status = "VITURE 本体に USB でつなごうとしています（実験）"
             usb.start()
             usbLog = usb.log
+        case .glassesAccessory:
+            status = "VITURE のアクセサリーからのデータを待っています…"
+            accessory.start()
         case .frontCamera:
             if isBackCameraBusy?() == true {
                 status = "背面カメラを使っている間は前面カメラを使えません（黒背景・物体認識オフで使えます）"
@@ -510,6 +515,8 @@ final class HeadTrackingService {
             ble.stop()
         case .glassesUSB:
             usb.stop()
+        case .glassesAccessory:
+            accessory.stop()
         case .frontCamera:
             face.stop()
         case .off:

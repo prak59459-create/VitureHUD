@@ -171,6 +171,86 @@ final class FeatureTests: XCTestCase {
         model.showsScan3D = false
     }
 
+    func testWorkCommands() async {
+        let work = model.workspace
+        work.data.todos = []
+        work.data.notes = []
+
+        await model.perform(.startTimer(seconds: 90))
+        XCTAssertTrue(work.countdown.isRunning)
+        XCTAssertEqual(work.countdown.remaining(at: Date()), 90, accuracy: 2)
+        XCTAssertTrue(model.isWidgetShown(.timer), "タイマーを始めたら HUD に出す")
+        await model.perform(.stopTimer)
+        XCTAssertFalse(work.countdown.isActive)
+
+        await model.perform(.setFocus(true))
+        XCTAssertEqual(work.focus.phase, .work)
+        XCTAssertTrue(model.isWidgetShown(.focusTimer))
+        await model.perform(.skipFocus)
+        XCTAssertTrue(work.focus.phase.isBreak)
+        XCTAssertEqual(work.focus.completedRounds, 1)
+        await model.perform(.setFocus(false))
+        XCTAssertFalse(work.focus.isActive)
+        work.resetFocus()
+
+        await model.perform(.addTodo("牛乳を買う"))
+        await model.perform(.addTodo("メールを返す"))
+        XCTAssertEqual(work.data.pendingTodos.map(\.title), ["牛乳を買う", "メールを返す"])
+        let done = await model.perform(.completeTodo(""))
+        XCTAssertTrue(done.message.contains("牛乳を買う"))
+        await model.perform(.completeTodo("メール"))
+        XCTAssertTrue(work.data.pendingTodos.isEmpty)
+
+        await model.perform(.addNote("14時に電話"))
+        XCTAssertEqual(work.data.selectedNote?.lines, ["14時に電話"])
+
+        let answer = await model.perform(.calculate("12*(3+4)"))
+        XCTAssertEqual(answer.message, "12*(3+4) = 84")
+
+        work.data.script = ""
+        let empty = await model.perform(.setTeleprompter(true))
+        XCTAssertTrue(empty.message.contains("台本"))
+        work.data.script = "こんにちは。今日はよろしくお願いします。"
+        await model.perform(.setTeleprompter(true))
+        XCTAssertTrue(work.prompter.isRunning)
+        await model.perform(.setTeleprompter(false))
+        XCTAssertFalse(work.prompter.isRunning)
+
+        await model.perform(.setStopwatch(true))
+        XCTAssertTrue(work.stopwatch.isRunning)
+        await model.perform(.setStopwatch(false))
+        work.resetStopwatch()
+
+        model.selectedTab = .home
+        await model.perform(.open(.work))
+        XCTAssertEqual(model.selectedTab, .work)
+        work.data.todos = []
+        work.data.notes = []
+        work.data.script = ""
+    }
+
+    func testCompactLayoutOpensHiddenTabsAsOverlay() {
+        model.isCompactLayout = true
+        model.selectedTab = .home
+        model.selectedTab = .vision
+        XCTAssertEqual(model.selectedTab, .home, "iPhone ではタブを切り替えず、上に重ねて開く")
+        XCTAssertEqual(model.overlayScreen, .vision)
+        model.overlayScreen = nil
+        model.selectedTab = .work
+        XCTAssertEqual(model.selectedTab, .work)
+        XCTAssertNil(model.overlayScreen)
+        model.isCompactLayout = false
+        model.selectedTab = .assistant
+        XCTAssertEqual(model.selectedTab, .assistant)
+        model.selectedTab = .home
+    }
+
+    func testLegacyDeskPresetIsUpgraded() {
+        let desk = model.presets.first { $0.key == "desk" }!
+        XCTAssertFalse(BuiltInContent.isLegacyDeskLayout(desk.layout))
+        XCTAssertEqual(model.presets.filter(\.isBuiltIn).count, 12)
+    }
+
     func testHeadGestureRunsConfiguredAction() {
         model.background = .camera
         model.settings.headTracking.shakeAction = .toggleBackground

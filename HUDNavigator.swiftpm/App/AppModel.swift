@@ -31,7 +31,21 @@ final class AppModel {
 
     // MARK: - 画面の状態
 
-    var selectedTab: AppScreen = .home
+    var selectedTab: AppScreen = .home {
+        didSet {
+            // iPhone（幅が狭い画面）ではタブを 5 つに絞り、ビジョン・アシスタントは上に重ねて開く
+            if isCompactLayout && (selectedTab == .vision || selectedTab == .assistant) {
+                overlayScreen = selectedTab
+                selectedTab = oldValue
+            }
+        }
+    }
+    /// 幅が狭い画面（iPhone）か。RootView が設定する
+    var isCompactLayout = false
+    /// iPhone で、タブの上に重ねて開いている画面（ビジョン・アシスタント）
+    var overlayScreen: AppScreen?
+    /// ワーク画面で開いている項目
+    var workSection: WorkSection = .focus
     var settingsPath: [SettingsRoute] = []
     /// 端末画面に HUD を全画面表示中（ミラー表示・単体利用時）
     var isHUDPresented = false {
@@ -89,6 +103,9 @@ final class AppModel {
     let depth = DepthService()
     let headTracking = HeadTrackingService()
     let pedometer = PedometerService()
+    let workspace = WorkspaceModel()
+    let calendar = CalendarService()
+    let web = WebBrowserModel()
 
     @ObservationIgnored let store: JSONFileStore
     @ObservationIgnored private var demand: [WidgetRequirement: Int] = [:]
@@ -129,6 +146,11 @@ final class AppModel {
         for builtIn in BuiltInContent.makePresets() where !loadedPresets.contains(where: { $0.id == builtIn.id }) {
             loadedPresets.append(builtIn)
         }
+        // 以前の「デスクワーク」（時計・通知・電池だけ）を変えていなければ、新しい配置にする
+        if let i = loadedPresets.firstIndex(where: { $0.key == "desk" && $0.isBuiltIn }), BuiltInContent.isLegacyDeskLayout(loadedPresets[i].layout),
+           let fresh = BuiltInContent.makePresets().first(where: { $0.key == "desk" }) {
+            loadedPresets[i] = fresh
+        }
         presets = loadedPresets
         let preferred = loadedSettings.selectedPresetID.flatMap { id in loadedPresets.first { $0.id == id }?.id }
         activePresetID = preferred ?? loadedPresets.first { $0.key == BuiltInContent.defaultPresetKey }?.id ?? loadedPresets[0].id
@@ -166,6 +188,7 @@ final class AppModel {
         configureNavigationCallbacks()
         configureVisionCallbacks()
         configureFeatures()
+        configureWorkspace()
 
         display.makeHUDView = {
             AnyView(HUDRootView(surface: .external).environment(AppModel.shared))
@@ -235,7 +258,7 @@ final class AppModel {
             return panels.filter { $0.widget == .clock || $0.widget == .notifications }
         }
         if features.reduceWhileMoving && movement.isMoving {
-            let essential: Set<WidgetKind> = [.nextTurn, .eta, .speed, .clock, .notifications, .miniMap, .compass, .battery, .gpsStatus, .tripDistance]
+            let essential: Set<WidgetKind> = [.nextTurn, .eta, .speed, .clock, .notifications, .miniMap, .compass, .battery, .gpsStatus, .tripDistance, .timer, .focusTimer]
             return panels.filter { essential.contains($0.widget) }
         }
         return panels
@@ -341,6 +364,9 @@ final class AppModel {
 
         // 歩数・気圧
         if needs(.pedometer) { pedometer.start() } else { pedometer.stop() }
+
+        // 予定（カレンダー）
+        if needs(.calendar) { calendar.start() } else { calendar.stop() }
 
         // 黒背景（グラスで透明）でも物体認識・距離推定するときは、映像を出さずにカメラを動かす
         let wantsHeadless = isHUDVisible && background != .camera
@@ -496,8 +522,9 @@ final class AppModel {
 
     func scenePhaseChanged(_ phase: ScenePhase) {
         isInBackground = phase == .background
-        if phase != .active { saveNow(); restoreDeviceScreenBrightness() }
+        if phase != .active { saveNow(); workspace.saveNow(); restoreDeviceScreenBrightness() }
         if phase == .active {
+            workspace.tick()
             device.refresh()
             camera.refreshAuthorization()
             Task { await importFromSyncFolderIfNewer() }

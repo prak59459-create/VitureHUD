@@ -12,6 +12,8 @@ public enum HeadTrackingSource: String, Codable, CaseIterable, Sendable {
     case bleSensor
     /// VITURE 本体の USB センサーを直接読む（実験・iOS の制限で動かない可能性が高い）
     case glassesUSB
+    /// VITURE の公式アクセサリー（USB-C XR 充電アダプターなど）を、公開されている API だけで読む
+    case glassesAccessory
     /// 端末の前面カメラで顔の向きを推定（机に置いて使うとき）
     case frontCamera
     /// 端末そのものの向き（動作確認用・端末を頭に固定する場合）
@@ -23,6 +25,7 @@ public enum HeadTrackingSource: String, Codable, CaseIterable, Sendable {
         case .airPods: return "AirPods"
         case .bleSensor: return "Bluetooth の動きセンサー"
         case .glassesUSB: return "VITURE 本体（USB・実験）"
+        case .glassesAccessory: return "VITURE 公式アダプター（公開 API）"
         case .frontCamera: return "前面カメラ（顔の向き）"
         case .device: return "端末の向き"
         }
@@ -34,6 +37,7 @@ public enum HeadTrackingSource: String, Codable, CaseIterable, Sendable {
         case .airPods: return "AirPods の中の加速度センサー・ジャイロで頭の向きを取ります。いちばん手軽です。"
         case .bleSensor: return "グラスのつるに小さな Bluetooth センサー（WitMotion WT901BLE など、または自作の ESP32）を付けて、グラスそのものの向きを取ります。"
         case .glassesUSB: return "VITURE 本体のセンサーを USB で直接読みます。iOS は一般のアプリに USB 機器の直接操作を許可していないため、動かない可能性が高い実験機能です（結果を診断に表示します）。"
+        case .glassesAccessory: return "VITURE の公式アクセサリー（USB-C XR 充電アダプターなど）が iOS の公開 API（アクセサリー通信・MIDI など）で見えるかを調べ、頭の向きのデータが届けば使います。機器には何も送らず、非公開の API も使いません。見えた内容は診断に表示します。"
         case .frontCamera: return "端末を顔の前に置き、前面カメラで顔の向きを推定します。背面カメラ（カメラ背景・物体認識）とは同時に使えません。"
         case .device: return "端末そのものの傾きを使います。動作確認や、端末を頭に固定する場合に。"
         }

@@ -341,6 +341,7 @@ public enum WebAddress {
         let text = input.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return nil }
         let lower = text.lowercased()
+        if lower == "about:blank" { return "about:blank" }
         if lower.hasPrefix("http://") || lower.hasPrefix("https://") {
             return text.contains(" ") ? nil : text
         }

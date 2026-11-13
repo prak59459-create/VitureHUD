@@ -39,6 +39,14 @@ struct WidgetContentView: View {
         case .steps: StepsWidget(ctx: ctx)
         case .headPose: HeadPoseWidget(ctx: ctx)
         case .distance: DistanceWidget(ctx: ctx)
+        case .notes: NotesWidget(ctx: ctx)
+        case .todo: TodoWidget(ctx: ctx)
+        case .focusTimer: FocusTimerWidget(ctx: ctx)
+        case .timer: TimerWidget(ctx: ctx)
+        case .calendar: CalendarWidget(ctx: ctx)
+        case .webPage: WebPageWidget(ctx: ctx)
+        case .teleprompter: TeleprompterWidget(ctx: ctx)
+        case .worldClock: WorldClockWidget(ctx: ctx)
         }
     }
 }

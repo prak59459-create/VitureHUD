@@ -395,8 +395,17 @@ struct HeadTrackingSettingsView: View {
                 Text("VITURE 本体のセンサーは iOS から公式には読めないため、ほかの方法で頭の向きを取ります。")
             }
 
+            Section {
+                NavigationLink {
+                    VitureTrackingGuideView()
+                } label: {
+                    Label("VITURE の 3DoF を使うには", systemImage: "eyeglasses")
+                }
+            }
+
             if h.source == .bleSensor { BLEIMUSection() }
             if h.source == .glassesUSB { GlassesUSBSection() }
+            if h.source == .glassesAccessory { GlassesAccessorySection() }
 
             Section {
                 Toggle("HUD を空間に固定", isOn: $model.settings.headTracking.headLock)
@@ -521,6 +530,106 @@ struct GlassesUSBSection: View {
         } footer: {
             Text("公開されている解析結果（オープンソース）を元に、USB の HID 経由でセンサーの送信を始める命令を送ります。iOS が一般のアプリに USB 機器を開かせない場合は「許可されていません」と表示されます。")
         }
+    }
+}
+
+/// VITURE の公式アクセサリー（公開 API）の診断
+struct GlassesAccessorySection: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        let probe = model.headTracking.accessory
+        Section {
+            if probe.items.isEmpty {
+                Text("公開 API で見える機器はありません。").foregroundStyle(.secondary)
+            }
+            ForEach(probe.items) { item in
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("\(item.kind)：\(item.name)").font(.subheadline.weight(.medium))
+                    if !item.detail.isEmpty { Text(item.detail).font(.caption).foregroundStyle(.secondary) }
+                }
+            }
+            LabeledContent("開いている通信", value: probe.openSession ?? "なし")
+            LabeledContent("受け取ったデータ", value: "\(probe.packets) 回・\(probe.receivedBytes) バイト")
+            ForEach(Array(probe.log.suffix(12).enumerated()), id: \.offset) { _, line in
+                Text(line).font(.caption2.monospaced())
+            }
+            Button("もう一度調べる") { probe.refresh() }
+            Button("結果をコピー（報告用）") {
+                UIPasteboard.general.string = probe.report
+                model.showToast("コピーしました")
+            }
+        } header: {
+            Text("VITURE 公式アダプター（公開 API）の診断")
+        } footer: {
+            Text("iOS の公開 API（アクセサリー通信・MIDI・オーディオ・コントローラー・外付けカメラ・有線ネットワーク）で見える機器を一覧にします。機器には何も送らず、届いたデータを読むだけです。頭の向きのデータが見つかれば、そのまま使います。VITURE はアダプターとの通信方法を公開していないため、見えても中身を読めない場合があります。その場合は「結果をコピー」の内容を知らせてください。")
+        }
+    }
+}
+
+/// VITURE の 3DoF（頭の向き）を正規の方法で使うための案内
+struct VitureTrackingGuideView: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        @Bindable var model = model
+        Form {
+            Section {
+                Text("VITURE の公式の説明では、グラスを iPhone・iPad に直接つないだ場合、頭の向き（3DoF）は使えません。iOS が一般のアプリに USB 機器の直接操作を許可していないためで、このアプリでも実機で「許可されていません」になることを確認しています。")
+                Text("VITURE の公式 SDK は Android・Windows・macOS・Linux 用で、iOS 用はありません（2026 年 11 月時点）。")
+            } header: {
+                Text("なぜ直接は読めないのか")
+            }
+
+            Section {
+                guideRow("1", "グラス側の 3DoF を使う", "グラス自体に画面を空間に固定する機能がある機種（VITURE Beast など）は、アプリなしでグラスが固定します。この場合はアプリの「HUD を空間に固定」をオフにしてください（二重にずれます）。")
+                guideRow("2", "公式の USB-C XR 充電アダプター", "VITURE が iPhone 用に出しているアダプターです。公式アプリ SpaceWalker では 3DoF が使えます。このアプリからは、アダプターが iOS の公開 API でどう見えるかを調べ、頭の向きのデータが届けば使います（通信方法が非公開のため、使えるとは限りません）。")
+                Button {
+                    model.settings.headTracking.source = .glassesAccessory
+                    model.showToast("公式アダプター（公開 API）で調べます")
+                } label: {
+                    Label("公式アダプターを調べる", systemImage: "magnifyingglass")
+                }
+                guideRow("3", "グラスに小さなセンサーを付ける", "Bluetooth の動きセンサー（WitMotion WT901BLECL など）をつるに付けると、グラスそのものの向きが取れます。いちばん確実です。")
+                Button {
+                    model.settings.headTracking.source = .bleSensor
+                } label: {
+                    Label("Bluetooth センサーを使う", systemImage: "dot.radiowaves.left.and.right")
+                }
+                guideRow("4", "AirPods を使う", "AirPods Pro・第 3 世代以降・Max の頭の向きを使います。追加の機器がいりません。")
+                Button {
+                    model.settings.headTracking.source = .airPods
+                } label: {
+                    Label("AirPods を使う", systemImage: "airpodspro")
+                }
+            } header: {
+                Text("使える方法（上から、グラスの向きに近い順）")
+            } footer: {
+                Text("どの方法も、iOS の公開されている機能だけを使います。")
+            }
+
+            Section {
+                LabeledContent("今の方法", value: model.settings.headTracking.source.displayName)
+                LabeledContent("状態", value: model.headTracking.status)
+            }
+        }
+        .navigationTitle("VITURE の 3DoF")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func guideRow(_ number: String, _ title: String, _ text: String) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Text(number)
+                .font(.subheadline.weight(.bold))
+                .foregroundStyle(.black)
+                .frame(width: 26, height: 26)
+                .background(UIStyle.accent, in: Circle())
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title).font(.subheadline.weight(.semibold))
+                Text(text).font(.footnote).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(.vertical, 2)
     }
 }
 

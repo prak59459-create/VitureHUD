@@ -35,6 +35,7 @@ struct HUDRootView: View {
                     HStack(spacing: 0) {
                         halfEye(size: size, parallax: depth / 2)
                         halfEye(size: size, parallax: -depth / 2)
+                            .environment(\.hudEyeIndex, 1)
                     }
                 case .fullSideBySide:
                     let eye = CGSize(width: size.width / 2, height: size.height)
@@ -45,6 +46,7 @@ struct HUDRootView: View {
                         scene(size: eye, parallax: -depth / 2, stereo: true)
                             .frame(width: eye.width, height: eye.height)
                             .clipped()
+                            .environment(\.hudEyeIndex, 1)
                     }
                 }
             }
@@ -232,9 +234,12 @@ struct HUDPanelView: View {
             textScale: model.layout.canvas.textScale
         )
         let demand: Set<WidgetRequirement> = (panel.isVisible && surface != .thumbnail) ? panel.widget.requirements : []
+        // 行を並べるウィジェット（メモ・ブラウザなど）は背が高いので、余白を画面全体の大きさから決める
+        let listStyle = panel.widget.isListStyle
+        let listPadding = canvasSize.height * (panel.widget == .webPage ? 0.006 : 0.016)
         WidgetContentView(panel: panel, style: style, typography: typography, theme: theme, surface: surface)
-            .padding(.horizontal, rect.height * 0.12)
-            .padding(.vertical, rect.height * 0.08)
+            .padding(.horizontal, listStyle ? listPadding : rect.height * 0.12)
+            .padding(.vertical, listStyle ? listPadding : rect.height * 0.08)
             .frame(width: max(1, rect.width), height: max(1, rect.height))
             .background(PanelChrome(style: style, allowsGlow: model.powerProfile.allowsGlowEffects))
             .opacity(panel.isVisible ? panel.opacity : 0.25)
@@ -431,6 +436,9 @@ struct SystemIndicatorLayer: View {
                 }
                 if model.settings.depth.enabled && model.depth.isFresh {
                     indicator("距離：\(model.depth.sourceLabel)", systemImage: "ruler", color: .mint)
+                }
+                if model.workspace.focus.isRunning && !model.layout.contains(widget: .focusTimer) {
+                    indicator(model.workspace.focus.phase.displayName, systemImage: "timer", color: .cyan)
                 }
             }
             if model.settings.showsMetricsOverlay {

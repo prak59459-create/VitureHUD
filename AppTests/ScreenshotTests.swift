@@ -77,6 +77,37 @@ final class ScreenshotTests: XCTestCase {
         model.navigation.stop()
     }
 
+    func testWorkScreens() throws {
+        let model = makeModel()
+        let work = model.workspace
+        work.data.todos = []
+        work.data.notes = []
+        for title in ["企画書の下書き", "見積もりを送る", "経費の精算", "会議室を予約"] { work.data.addTodo(title) }
+        work.data.completeNextTodo()
+        work.data.addNote(title: "打ち合わせ", text: "・来週までに試作\n・予算は 30 万円まで\n・次回は木曜 14 時")
+        work.data.script = "本日はお集まりいただきありがとうございます。\nこれから新しい取り組みについて、3 つの点をお話しします。"
+        work.startFocus()
+        defer { work.stopFocus() }
+        model.workSection = .focus
+        try shoot(WorkScreen(), model: model, name: "work-focus")
+        try shoot(WorkScreen(), model: model, name: "work-focus-full", height: 1700)
+        model.workSection = .todo
+        try shoot(WorkScreen(), model: model, name: "work-todo")
+        model.workSection = .notes
+        try shoot(WorkScreen(), model: model, name: "work-notes", height: 1100)
+        model.workSection = .script
+        try shoot(WorkScreen(), model: model, name: "work-script", height: 1200)
+        model.workSection = .agenda
+        try shoot(WorkScreen(), model: model, name: "work-agenda", height: 1100)
+        // ブラウザ：グラスに映している想定（端末はリモコン）。ネットワークを使わないよう空のページを開く
+        model.web.open("about:blank")
+        model.web.register(.glasses)
+        model.workSection = .browser
+        try shoot(WorkScreen(), model: model, name: "work-browser-remote", height: 1300)
+        model.web.unregister(.glasses)
+        try shoot(NavigationStack { VitureTrackingGuideView() }, model: model, name: "viture-3dof-guide", height: 1300)
+    }
+
     func testEditorAssistantSettings() throws {
         let model = makeModel()
         try shoot(HUDEditorScreen(), model: model, name: "hud-editor")

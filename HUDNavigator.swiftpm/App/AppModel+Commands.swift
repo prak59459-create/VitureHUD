@@ -190,6 +190,9 @@ extension AppModel {
             return CommandOutcome(message: on ? "距離の推定をオンにしました（\(DepthService.resolve(settings.depth.source).displayName)）。" : "距離の推定をオフにしました。")
         case .measureDistance:
             return measureDistanceOutcome()
+        case .setFocus, .skipFocus, .startTimer, .stopTimer, .setStopwatch, .addTodo, .completeTodo, .addNote,
+             .openWeb, .webScroll, .webBack, .setTeleprompter, .calculate:
+            return performWork(command)
         case .cancel:
             return CommandOutcome(message: "キャンセルしました。", speak: false)
         case .ask(let question):
@@ -264,7 +267,7 @@ extension AppModel {
 
     func open(_ screen: AppScreen) {
         switch screen {
-        case .home, .hud, .navigation, .vision, .assistant, .settings:
+        case .home, .hud, .navigation, .vision, .assistant, .settings, .work:
             selectedTab = screen
         case .hudEditor:
             selectedTab = .hud
@@ -275,7 +278,8 @@ extension AppModel {
             selectedTab = .settings
             settingsPath = [.weather]
         case .scan3D:
-            selectedTab = .vision
+            // 今の画面の上に全画面で開く（iPhone ではビジョンを重ねて開くので、タブは切り替えない）
+            overlayScreen = nil
             showsScan3D = true
         }
     }
@@ -560,6 +564,7 @@ extension AppModel {
         assistant.clear()
         deviceTest.reset()
         weather.clear()
+        workspace.deleteAll()
         userThemes = []
         favorites = []
         presets = BuiltInContent.makePresets()
