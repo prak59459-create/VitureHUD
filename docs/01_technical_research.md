@@ -76,6 +76,13 @@ App プロジェクトは **`.swiftpm`（Swift Package 形式）** になる。`
 - **iOS で使えない理由**：iPhone / iPad の一般のアプリは USB HID 機器を直接開けない（hidapi・IOKit は非公開。iPadOS の DriverKit は M1 以降の iPad と Apple の特別な許可が必要で、A16 iPad・iPhone・AltStore の署名では使えない）。Safari・iOS 版 Chrome は WebHID 非対応
 - **このアプリでの扱い**：頭の向きは AirPods（CMHeadphoneMotionManager）で代用。明るさはアプリ側の描画で調整（グラス本体の明るさ・電子調光は本体のボタンで操作）。3D は、端末が 3840×1080 で出力した場合は自動で左右に描き分け、1920×1080 の場合は設定で左右に半分ずつ描く
 
+### 3-1-3. iPhone で 3DoF を使う正規の方法の調査（2026-11-12）
+- VITURE の SpaceWalker（iOS）の説明：**グラスを iPhone に直接つないだ場合、頭の向き（Head Tracking）は無効**。iPhone 15 以降＋**USB-C XR 充電アダプター**で Pin Mode（3DoF）・VR 動画が使える（iPhone 16e は非対応）【確認済：[VITURE Academy「SpaceWalker for iOS」](https://academy.viture.com/xr_glasses/spacewalker_ios)、[App Store](https://apps.apple.com/app/id6450915765)】
+- 公式の C SDK の対応は Linux・macOS・Windows（＋Android 用 SDK）。**iOS 版はない**【確認済：[VITURE XR Glasses SDK](https://www.viture.com/developer/glasses-sdk/glasses)】
+- VITURE Beast はグラス側（専用チップ）で 3DoF を行い、アプリ・アダプターなしで画面を固定できるとされる【第三者情報。公式 SDK のページにも「Beast は native モードで native 3DoF」とある】
+- アダプターとアプリの間の通信方法（MFi のアクセサリー通信か、MIDI・ネットワークなどか）は**公開されていない**【未確認】。Apple の説明では、MFi アクセサリーと通信できるアプリはアクセサリーのメーカーが決める
+- **このアプリでの扱い**：非公開 API・機器への書き込みは行わず、iOS の公開 API で見える範囲（ExternalAccessory・CoreMIDI・オーディオ・GameController・外付けカメラ・有線ネットワーク）を診断として一覧にし、頭の向きのデータが読めれば使う。読めない場合は Bluetooth センサー・AirPods を案内する
+
 ### 3-2. iOS 側の外部ディスプレイの動作
 | 方式 | 内容 | 状況 |
 |------|------|------|
